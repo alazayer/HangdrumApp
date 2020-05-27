@@ -1,0 +1,132 @@
+# creating the features of Button
+<MyButton@Button>:
+    size_hint: [None, None]
+    size: [200, 200]
+    background_normal: 'Imgs/blueButtonPressed.png'
+    background_down: 'Imgs/redButtonPressed.png'
+
+# creating the root of .kv 
+<Anchor_Layout>:
+
+    # Assigning grids
+    rows: 3
+
+    FloatLayout:
+
+        Image:
+            # size_hint: [1, 1]
+            size: self.size
+            source: 'Imgs/Hangdrum_Pic.png'
+
+    # Anchor Layout 1
+    AnchorLayout:
+
+        # position of Anchor Layout
+        anchor_x: 'left'
+        anchor_y: 'top'
+
+        # creating Button
+        # RelativeLayout: (if uncomment, indent below)
+        MyButton:
+            id: F4
+            text: 'F4'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 2
+    AnchorLayout:
+        anchor_x: 'center'
+        anchor_y: 'top'
+
+        MyButton:
+            id: A4
+            text: 'A4'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 3
+    AnchorLayout:
+        anchor_x: 'right'
+        anchor_y: 'top'
+
+        MyButton:
+            id: G4
+            text: 'G4'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 4
+    AnchorLayout:
+        anchor_x: 'left'
+        anchor_y: 'center'
+
+        MyButton:
+            id: D4
+            text: 'D4'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 5
+    AnchorLayout:
+        anchor_x: 'center'
+        anchor_y: 'center'
+
+        MyButton:
+            id: D3
+            text: 'D3'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 6
+    AnchorLayout:
+        anchor_x: 'right'
+        anchor_y: 'center'
+
+        MyButton:
+            id: E4
+            text: 'E4'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 7
+    AnchorLayout:
+        anchor_x: 'left'
+        anchor_y: 'bottom'
+
+        MyButton:
+            id: Bb3
+            text: 'Bb3'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 8
+    AnchorLayout:
+        anchor_x: 'center'
+        anchor_y: 'bottom'
+
+        MyButton:
+            id: A3
+            text: 'A3'
+            state: "normal"
+            on_press: root.say_hello()
+
+    # Anchor Layout 9
+    AnchorLayout:
+        anchor_x: 'right'
+        anchor_y: 'bottom'
+
+        MyButton:
+            id: C4
+            text: 'C4'
+            state: "normal"
+            on_press: root.say_hello()
+
+
+
+# creating Canvas  (If you wanted to put a background)
+#canvas:
+#    Color:
+#        rgb: [.5, .324, .384]
+#    Rectangle:
+#        pos: self.pos
+#        size: self.size
