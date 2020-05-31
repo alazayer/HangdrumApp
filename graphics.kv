@@ -1,132 +1,147 @@
-# creating the features of Button
-<MyButton@Button>:
+############# BUTTON TEMPLATES ###############
+<NoteButton>:
     size_hint: [None, None]
     size: [200, 200]
     background_normal: 'Imgs/blueButtonPressed.png'
     background_down: 'Imgs/redButtonPressed.png'
 
-# creating the root of .kv 
-<Anchor_Layout>:
 
-    # Assigning grids
-    rows: 3
+<PlayButton>:
+    size_hint: [None, None]
+    size: [200, 200]
+    background_normal: 'Imgs/playButtonNormal.png'
+    background_down: 'Imgs/playButtonPressed.png'
 
-    FloatLayout:
+############# SCREEN MANAGER LAYOUT ###############
+<MainLayout>
+    id: mainlayout
 
-        Image:
-            # size_hint: [1, 1]
-            size: self.size
+    Manager:
+        id: screen_manager
+
+        # Links between .py file and .kv file
+        screen_one: screen_one
+        screen_two: screen_two
+
+        ScreenOne:
+            id: screen_one
+            name: 'screen1'
+            manager: screen_manager
+
+        ScreenTwo:
+            id: screen_two
+            name: 'screen2'
+            manager: screen_manager
+
+
+############# SCREEN 1 LAYOUT ############
+<ScreenOne>
+    filename: filename
+    scale: scale
+    tempo: tempo
+
+    canvas:
+        Color:
+            rgb: [.1, .1, .384]
+        Rectangle:
+            pos: 0,0
+            size: root.width, root.height
+
+    GridLayout:
+        rows: 2
+        size: root.width - 400, root.height - 400
+        size_hint: [None, None]
+        pos: 200, 200
+
+        canvas:
+            Color:
+                rgb: [0, 0, 0]
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        GridLayout:
+            rows: 3
+            cols: 2
+            # size: root.width - 200, root.height - 200
+            # size_hint: [None, None]
+
+            Label:
+                text: "File Path:"
+                canvas.before:
+                    Color:
+                        rgb: 0, 0, 0
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+            TextInput:
+                id: filename
+                text: 'Tabs/LandOfColeHDtabs.xlsx'
+
+            Label:
+                text: "Desired Tempo:"
+
+            TextInput:
+                id: tempo
+                text: '120'
+
+            Label:
+                text: "Scale: \n (separated by commas, no spaces)"
+                halign: 'center'
+
+            TextInput:
+                id: scale
+                text: 'D3,A3,Bb3,C4,D4,E4,F4,G4,A4'
+
+        Button:
+            text: "Load"
+            size: 500, 200
+            size_hint: [None, None]
+            pos_hint: {"x":0.6, "y":0.5}
+            on_release: root.manager.current = 'screen2'
+
+############# SCREEN 2 LAYOUT ############
+<ScreenTwo>
+
+    canvas:
+        Color:
+            rgb: [.5, .5, .384]
+        Rectangle:
             source: 'Imgs/Hangdrum_Pic.png'
+            pos: 200,200
+            size: root.width-400, root.height-400
 
-    # Anchor Layout 1
+    # FloatLayout where notes will be stored
+    FloatLayout:
+        id: noteButtons
+
+        NoteButton:
+            id: slap
+            text: 'Slap'
+            color: 0,0,0,1
+            size: [150, 150]
+            pos_hint: {"x":0.33, "y":0.33}
+            background_normal: 'Imgs/slapButton.png'
+            background_down: 'Imgs/slapButtonPressed.png'
+
     AnchorLayout:
 
-        # position of Anchor Layout
-        anchor_x: 'left'
-        anchor_y: 'top'
-
-        # creating Button
-        # RelativeLayout: (if uncomment, indent below)
-        MyButton:
-            id: F4
-            text: 'F4'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 2
-    AnchorLayout:
-        anchor_x: 'center'
-        anchor_y: 'top'
-
-        MyButton:
-            id: A4
-            text: 'A4'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 3
-    AnchorLayout:
-        anchor_x: 'right'
-        anchor_y: 'top'
-
-        MyButton:
-            id: G4
-            text: 'G4'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 4
-    AnchorLayout:
-        anchor_x: 'left'
-        anchor_y: 'center'
-
-        MyButton:
-            id: D4
-            text: 'D4'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 5
-    AnchorLayout:
-        anchor_x: 'center'
-        anchor_y: 'center'
-
-        MyButton:
-            id: D3
-            text: 'D3'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 6
-    AnchorLayout:
-        anchor_x: 'right'
-        anchor_y: 'center'
-
-        MyButton:
-            id: E4
-            text: 'E4'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 7
-    AnchorLayout:
-        anchor_x: 'left'
-        anchor_y: 'bottom'
-
-        MyButton:
-            id: Bb3
-            text: 'Bb3'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 8
-    AnchorLayout:
-        anchor_x: 'center'
-        anchor_y: 'bottom'
-
-        MyButton:
-            id: A3
-            text: 'A3'
-            state: "normal"
-            on_press: root.say_hello()
-
-    # Anchor Layout 9
-    AnchorLayout:
         anchor_x: 'right'
         anchor_y: 'bottom'
 
-        MyButton:
-            id: C4
-            text: 'C4'
-            state: "normal"
-            on_press: root.say_hello()
+        Button:
+            text: "Back"
+            # color: 1,1,1,0.5
+            # background_color: 0.1, 0.1, 0.1, 1
+            size_hint: [None, None]
+            size: [200, 100]
+            on_release: root.manager.current = 'screen1'
+            on_release: root.stopMusic()
+
+    PlayButton:
+        size: self.size
+        id: playbutton
 
 
 
-# creating Canvas  (If you wanted to put a background)
-#canvas:
-#    Color:
-#        rgb: [.5, .324, .384]
-#    Rectangle:
-#        pos: self.pos
-#        size: self.size

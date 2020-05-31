@@ -335,7 +335,7 @@ class Tabs():
         mf = MIDIFile(2)  # 2 tracks
         tempo = 120
         volume = 100
-        duration = 4
+        duration = 1
         time = 0
         track = 0
 

@@ -28,6 +28,8 @@ from kivy.app import App
 import tabsclass
 from kivy.uix.label import Label
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.stacklayout import StackLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.textinput import TextInput
@@ -43,8 +45,8 @@ from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from functools import partial # to be able to load arguments in Clock
-
-
+from kivy.uix.screenmanager import ScreenManager, Screen, WipeTransition
+from kivy.app import App
 
 # to change the kivy default settings we use this module config
 from kivy.config import Config
@@ -54,82 +56,131 @@ from kivy.config import Config
 Config.set('graphics', 'resizable', True)
 
 # Creating class MyGrid to add multiple widgets
+class Manager(ScreenManager):
+    screen_one = ObjectProperty(None)
+    screen_two = ObjectProperty(None)
 
-class Anchor_Layout(FloatLayout):
+class ScreenOne(Screen):
+    filename = ObjectProperty()
+    scale = ObjectProperty()
+    tempo = ObjectProperty()
 
-    # Adding functionality and arranging a callback to a button
+class ScreenTwo(Screen):
+
+    def on_enter(self, *args):
+
+        scaleInput = App.get_running_app().root.ids.screen_one.scale.text.split(',')
+        self.scale = tabsclass.Scale(scaleInput)
+        # Fixed positions for FloatLayout
+        xpos = [0.2,0.45,0.7,0.1,0.45,0.8,0.2,0.45,0.7]
+        ypos = [0.7,0.75,0.7,0.45,0.45,0.45,0.2,0.15,0.2]
+
+        self.noteDict = {}
+        for i, note in enumerate(self.scale.notes):
+            btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
+            self.noteDict[note] = btn # Creating new dictionary to reference each button
+            self.ids.noteButtons.add_widget(btn)
+        self.noteDict['slap'] = self.ids['slap']
+
+    def stopMusic(self, *args):
+
+        allOnSchedules = App.get_running_app().root.ids.screen_two.ids.playbutton.allOnSchedules
+
+        try:
+            sound = App.get_running_app().root.ids.screen_two.ids.playbutton.sound
+
+            sound.stop()
+        except:
+            print('Sound not loaded')
+
+        for onEvent in allOnSchedules:
+            Clock.unschedule(onEvent)
+
+
+
+class NoteButton(Button):
+
+    def on_press(self):
+        print('Play Note')
+
+class PlayButton(Button):
+
+
     def __init__(self, **kwargs):
-        super(Anchor_Layout, self).__init__(**kwargs)
+        super(PlayButton, self).__init__(**kwargs)
 
-        # self.filename = StringProperty(None)
-        self.filename = 'MIDI/LOC.mid'
-        self.sound = ObjectProperty(None, allownone=True)
+        self.allOnSchedules = []
 
+    def on_release(self):
 
-        # Can use this to schedule an event repeatedly or once
-        # self.function_interval = Clock.schedule_interval(self.pressButton, 4)
-        # Clock.schedule_once(self.stop_interval, 2)
-        # Clock.schedule_once(partial(self.pressButton, 'F4'), 2)
-        # Clock.schedule_once(partial(self.releaseButton, 'F4'), 4)
-        # Clock.schedule_once(partial(self.pressButton, 'A4'), 6)
+        self.tempo = App.get_running_app().root.ids.screen_one.tempo.text
 
-    def say_hello(self, *args):
+        for onEvent in self.allOnSchedules:
+            Clock.unschedule(onEvent)
 
-        landOfCole = tabsclass.Tabs("Tabs/LandOfColeHDtabsNoSlap.xlsx")
-        landOfCole.writeToMIDI("MIDI/LOC.mid")
-        AliScale = tabsclass.Scale(['D3', 'A3', 'Bb3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'])
-        AlaScale = tabsclass.Scale(['B2', 'C4', 'C#4', 'D4', 'E4', 'F#4', 'G4', 'B4', 'C#5'])
+        self.allOnSchedules = []
 
-        midiFile = tabsclass.readMIDI('MIDI/LOC.mid',False)
+        self.tabsPath = App.get_running_app().root.ids.screen_one.filename.text
+        fileName = self.tabsPath.split('.')[0].split('/')[1]
+        tabsLoaded = tabsclass.Tabs(self.tabsPath)
+        self.midiPath = "MIDI/" + fileName + '.mid'
+        tabsLoaded.writeToMIDI(self.midiPath, int(self.tempo), 1)
+        self.sound = SoundLoader.load(self.midiPath)
 
-        for i, track in enumerate(midiFile.tracks):
-            print('Track {}: {}'.format(i, track.name))
-            cumTime = 0
-            for msg in track:
-                noteAction = str(msg).split()
-                if(len(noteAction)==5 and noteAction[0] != '<meta'):
-                    noteStatus = noteAction[0]
-                    channel = noteAction[1][8:]
-                    notePitch = AliScale.MIDIToNote[int(noteAction[2][5:])]
-                    noteActionTime = noteAction[4]
-                    cumTime += int(noteActionTime[5:])
-                    #print('{} on channel {} for note {} at time {}'.format(noteStatus,channel,notePitch,cumTime))
-
-                    timeAdjuster = 1920
-                    if(noteStatus == 'note_on'):
-                        print('Turning on note {} at time {}'.format(notePitch,cumTime/timeAdjuster))
-                        Clock.schedule_once(partial(self.pressButton, notePitch), cumTime/timeAdjuster)
-                    elif(noteStatus == 'note_off'):
-                        print('Turning off note {} at time {}'.format(notePitch,cumTime/timeAdjuster))
-                        Clock.schedule_once(partial(self.releaseButton, notePitch), (cumTime-100)/timeAdjuster)
-
-        #if self.sound is None:
-        self.sound = SoundLoader.load(self.filename)
-        # stop the sound if it's currently playing
-        #if self.sound.status != 'stop':
-        #    self.sound.stop()
-        #self.sound.volume = self.volume
+        print('Playing {} at a tempo of {} '.format(fileName, self.tempo))
         self.sound.play()
 
-    def stop_interval(self, *args):
-        self.function_interval.cancel()
+        self.displayMIDI()
+
+    def displayMIDI(self):
+
+        self.scale = App.get_running_app().root.ids.screen_two.scale
+        self.noteDict = App.get_running_app().root.ids.screen_two.noteDict
+
+        midiFile = tabsclass.readMIDI(self.midiPath, False)
+
+        for i, track in enumerate(midiFile.tracks):
+            #print('Track {}: {}'.format(i, track.name))
+            cumTime = 0
+
+            for msg in track:
+                noteAction = str(msg).split()
+                if (len(noteAction) == 5 and noteAction[0] != '<meta'):
+                    noteStatus = noteAction[0]
+                    channel = noteAction[1][8:]
+                    if(i==2):
+                        notePitch = 'slap'
+                    else:
+                        notePitch = self.scale.MIDIToNote[int(noteAction[2][5:])]
+                    noteActionTime = noteAction[4]
+                    cumTime += int(noteActionTime[5:])
+                    # print('{} on channel {} for note {} at time {}'.format(noteStatus,channel,notePitch,cumTime))
+
+                    timeAdjuster = 1920*(int(self.tempo)/120)
+                    if (noteStatus == 'note_on'):
+                        # print('Turning on note {} at time {}'.format(notePitch, cumTime / timeAdjuster))
+                        onEvent = Clock.schedule_once(partial(self.pressButton, notePitch), cumTime / timeAdjuster)
+                        self.allOnSchedules.append(onEvent)
+                        #print('TurnOnSchedule is = {}'.format(allOnSchedules))
+                    elif (noteStatus == 'note_off'):
+                        # print('Turning off note {} at time {}'.format(notePitch, cumTime / timeAdjuster))
+                        Clock.schedule_once(partial(self.releaseButton, notePitch), (cumTime - 100) / timeAdjuster)
 
     def pressButton(self, *args):
-        # print(args)
-        self.ids[args[0]].state = "down"
+        self.noteDict[args[0]].state = "down"
+        pass
 
     def releaseButton(self, *args):
-        # print(args)
-        self.ids[args[0]].state = "normal"
+        self.noteDict[args[0]].state = "normal"
+        pass
 
-
-
-
+class MainLayout(StackLayout):
+    pass
 
 class graphicsApp(App):
 
     def build(self):
-        return Anchor_Layout()
+        return MainLayout()
 
 if __name__ == '__main__':
     graphicsApp().run()

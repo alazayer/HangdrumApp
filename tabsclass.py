@@ -310,7 +310,7 @@ class Tabs():
 
         return Tabs(self._replaceTabWithNewNotes(newNotes))
 
-    def writeToMIDI(self, path):
+    def writeToMIDI(self, path, tempo=120, duration=1):
 
         # Loop through all notes
         Melody = list(zip(self.MIDIvalues, self.notesLoc))
@@ -331,9 +331,9 @@ class Tabs():
 
         # create your MIDI object (fixed values at the moment)
         mf = MIDIFile(2)  # 2 tracks
-        tempo = 120
+        # tempo = 120
         volume = 100
-        duration = 1
+        # duration = 1
         time = 0
         track = 0
 
