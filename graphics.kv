@@ -1,7 +1,7 @@
 ############# BUTTON TEMPLATES ###############
 <NoteButton>:
     size_hint: [None, None]
-    size: [200, 200]
+    size: [160, 160]
     background_normal: 'Imgs/blueButtonPressed.png'
     background_down: 'Imgs/redButtonPressed.png'
 
@@ -37,12 +37,16 @@
 ############# SCREEN 1 LAYOUT ############
 <ScreenOne>
     filename: filename
-    scale: scale
+    mainScale: mainScale
+    secondScale: secondScale
+    secondScaleCheckBox: secondScaleCheckBox
+    stepBasedToggle: stepBasedToggle
+    scaleBasedToggle: scaleBasedToggle
     tempo: tempo
 
     canvas:
         Color:
-            rgb: [.1, .1, .384]
+            rgb: [0, 0, 0]
         Rectangle:
             pos: 0,0
             size: root.width, root.height
@@ -61,19 +65,20 @@
                 size: self.size
 
         GridLayout:
-            rows: 3
+            rows: 4
             cols: 2
             # size: root.width - 200, root.height - 200
             # size_hint: [None, None]
 
+            canvas:
+                Color:
+                    rgb: [.1, .1, .384]
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
             Label:
                 text: "File Path:"
-                canvas.before:
-                    Color:
-                        rgb: 0, 0, 0
-                    Rectangle:
-                        pos: self.pos
-                        size: self.size
 
             TextInput:
                 id: filename
@@ -87,19 +92,79 @@
                 text: '120'
 
             Label:
-                text: "Scale: \n (separated by commas, no spaces)"
+                text: "Main Scale:"
                 halign: 'center'
 
             TextInput:
-                id: scale
+                id: mainScale
                 text: 'D3,A3,Bb3,C4,D4,E4,F4,G4,A4'
 
-        Button:
-            text: "Load"
-            size: 500, 200
+            GridLayout:
+                cols: 2
+
+                canvas.before:
+                    Color:
+                        rgb: [0.7, 0.3, .6]
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+                CheckBox:
+                    group: 'useSecondScale'
+                    id: secondScaleCheckBox
+                    size_hint_x: 0.4
+
+                Label:
+                    text: 'Convert to 2nd Scale'
+                    halign: 'left'
+
+            TextInput:
+                id: secondScale
+                text: 'B2,C4,C#4,D4,E4,F#4,G4,B4,C#5'
+                background_disabled_normal: ""
+                disabled: not secondScaleCheckBox.active
+
+        GridLayout:
+            id: loadingBar
+            cols: 2
+            rows: 1
+            size: root.width - 400, root.height - 1000
+            pos: 200, 200
             size_hint: [None, None]
-            pos_hint: {"x":0.6, "y":0.5}
-            on_release: root.manager.current = 'screen2'
+
+
+            GridLayout:
+                rows:2
+
+                canvas:
+                    Color:
+                        rgb: [0.7, 0.3, .6, 1]
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+                ToggleButton:
+                    text: 'Based on Steps'
+                    group: 'scaleConversion'
+                    id: stepBasedToggle
+                    background_color: 1.2, 0.1, 0.4, 1
+                    disabled: not secondScaleCheckBox.active
+                    state: 'down'
+
+                ToggleButton:
+                    background_color: 1.2, 0.1, 0.4, 1
+                    text: 'Based on Scale'
+                    group: 'scaleConversion'
+                    id: scaleBasedToggle
+                    disabled: not secondScaleCheckBox.active
+
+            Button:
+                text: "Load"
+                background_color: 0.2, 0.8, 0.4, 1
+                # size: 500, 200
+                # size_hint: [None, None]
+                # pos_hint: {"x":0.6, "y":0.5}
+                on_release: root.manager.current = 'screen2'
 
 ############# SCREEN 2 LAYOUT ############
 <ScreenTwo>
@@ -109,8 +174,8 @@
             rgb: [.5, .5, .384]
         Rectangle:
             source: 'Imgs/Hangdrum_Pic.png'
-            pos: 200,200
-            size: root.width-400, root.height-400
+            pos: 250,200
+            size: root.width-500, root.height-400
 
     # FloatLayout where notes will be stored
     FloatLayout:

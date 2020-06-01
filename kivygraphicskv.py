@@ -42,6 +42,7 @@ from kivy.graphics import Line
 from kivy.graphics import Ellipse
 from kivy.graphics import Color
 from kivy.core.window import Window
+from kivy.uix.checkbox import CheckBox
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from functools import partial # to be able to load arguments in Clock
@@ -62,25 +63,66 @@ class Manager(ScreenManager):
 
 class ScreenOne(Screen):
     filename = ObjectProperty()
-    scale = ObjectProperty()
+    mainScale = ObjectProperty()
+    secondScale = ObjectProperty()
+    secondScaleCheckBox = ObjectProperty()
+    stepBasedToggle = ObjectProperty()
+    scaleBasedToggle = ObjectProperty()
     tempo = ObjectProperty()
+
 
 class ScreenTwo(Screen):
 
     def on_enter(self, *args):
 
-        scaleInput = App.get_running_app().root.ids.screen_one.scale.text.split(',')
-        self.scale = tabsclass.Scale(scaleInput)
-        # Fixed positions for FloatLayout
-        xpos = [0.2,0.45,0.7,0.1,0.45,0.8,0.2,0.45,0.7]
-        ypos = [0.7,0.75,0.7,0.45,0.45,0.45,0.2,0.15,0.2]
+        # Initalizing to avoid errors
+        self.secondScale = None
+        self.conversionType = None
 
-        self.noteDict = {}
-        for i, note in enumerate(self.scale.notes):
-            btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
-            self.noteDict[note] = btn # Creating new dictionary to reference each button
-            self.ids.noteButtons.add_widget(btn)
-        self.noteDict['slap'] = self.ids['slap']
+        secondScaleCheckBox = App.get_running_app().root.ids.screen_one.secondScaleCheckBox.state
+        mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
+
+        try:
+            self.mainScale = tabsclass.Scale(mainScaleInput)
+            scaleToDisplay = self.mainScale
+        except:
+            print('Format of main scale is wrong... please use commas between notes without space')
+            self.mainScale = None
+            App.get_running_app().root.ids.screen_manager.current = 'screen1'
+
+        # Checking if user requested to convert to another scale
+        secondScaleCheckBox = App.get_running_app().root.ids.screen_one.secondScaleCheckBox.state
+
+        if(secondScaleCheckBox == 'down'):
+            secondScaleInput = App.get_running_app().root.ids.screen_one.secondScale.text.split(',')
+            try:
+                self.secondScale = tabsclass.Scale(secondScaleInput)
+            except:
+                print('Format of second scale is wrong... please use commas between notes without space')
+
+
+            scaleToDisplay = self.secondScale
+
+            # Check which type of conversion does user want. Default is step based unless user chooses scale based
+            scaleToggleState = App.get_running_app().root.ids.screen_one.scaleBasedToggle.state
+            if(scaleToggleState == 'down'):
+                self.conversionType = 'scaleConversion'
+            else:
+                self.conversionType = 'stepConversion'
+
+
+
+        if(self.mainScale != None):
+            # Fixed positions for FloatLayout
+            xpos = [0.45,0.45,0.2,0.7,0.1,0.8,0.2,0.7,0.45]
+            ypos = [0.45,0.15,0.2,0.2,0.45,0.45,0.7,0.7,0.75]
+
+            self.noteDict = {}
+            for i, note in enumerate(scaleToDisplay.notes):
+                btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
+                self.noteDict[note] = btn # Creating new dictionary to reference each button
+                self.ids.noteButtons.add_widget(btn)
+            self.noteDict['slap'] = self.ids['slap']
 
     def stopMusic(self, *args):
 
@@ -113,7 +155,20 @@ class PlayButton(Button):
 
     def on_release(self):
 
+
+        self.mainScale = App.get_running_app().root.ids.screen_two.mainScale
+        self.secondScale = App.get_running_app().root.ids.screen_two.secondScale
+        print('Second scale is: {}'.format(self.secondScale))
+
+        if(self.secondScale == None):
+            self.usedScale = self.mainScale
+        else:
+            self.usedScale = self.secondScale
+
+        self.noteDict = App.get_running_app().root.ids.screen_two.noteDict
         self.tempo = App.get_running_app().root.ids.screen_one.tempo.text
+        self.conversionType = App.get_running_app().root.ids.screen_two.conversionType
+
 
         for onEvent in self.allOnSchedules:
             Clock.unschedule(onEvent)
@@ -123,6 +178,17 @@ class PlayButton(Button):
         self.tabsPath = App.get_running_app().root.ids.screen_one.filename.text
         fileName = self.tabsPath.split('.')[0].split('/')[1]
         tabsLoaded = tabsclass.Tabs(self.tabsPath)
+
+        if(self.conversionType == 'scaleConversion'):
+            print('Converting to scale using scale...')
+            tabsLoaded = tabsLoaded.mapNewScale(self.mainScale, self.secondScale)
+        elif(self.conversionType == 'stepConversion'):
+            print('Converting to scale using steps...')
+            Melody, Missed, Best = tabsLoaded.applyScaleToTab(self.secondScale, True, False)
+            tabsLoaded = tabsclass.Tabs(Melody[Best])
+
+        print('Converted to second scale')
+
         self.midiPath = "MIDI/" + fileName + '.mid'
         tabsLoaded.writeToMIDI(self.midiPath, int(self.tempo), 1)
         self.sound = SoundLoader.load(self.midiPath)
@@ -133,9 +199,6 @@ class PlayButton(Button):
         self.displayMIDI()
 
     def displayMIDI(self):
-
-        self.scale = App.get_running_app().root.ids.screen_two.scale
-        self.noteDict = App.get_running_app().root.ids.screen_two.noteDict
 
         midiFile = tabsclass.readMIDI(self.midiPath, False)
 
@@ -151,7 +214,7 @@ class PlayButton(Button):
                     if(i==2):
                         notePitch = 'slap'
                     else:
-                        notePitch = self.scale.MIDIToNote[int(noteAction[2][5:])]
+                        notePitch = self.usedScale.MIDIToNote[int(noteAction[2][5:])]
                     noteActionTime = noteAction[4]
                     cumTime += int(noteActionTime[5:])
                     # print('{} on channel {} for note {} at time {}'.format(noteStatus,channel,notePitch,cumTime))
