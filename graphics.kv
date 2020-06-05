@@ -43,6 +43,7 @@
     stepBasedToggle: stepBasedToggle
     scaleBasedToggle: scaleBasedToggle
     tempo: tempo
+    reverseScaleCheckBox: reverseScaleCheckBox
 
     canvas:
         Color:
@@ -100,23 +101,26 @@
                 text: 'D3,A3,Bb3,C4,D4,E4,F4,G4,A4'
 
             GridLayout:
-                cols: 2
+                cols: 3
 
                 canvas.before:
                     Color:
-                        rgb: [0.7, 0.3, .6]
+                        rgb: [0.3, 0.3, .6]
                     Rectangle:
                         pos: self.pos
                         size: self.size
 
                 CheckBox:
-                    group: 'useSecondScale'
                     id: secondScaleCheckBox
                     size_hint_x: 0.4
 
                 Label:
                     text: 'Convert to 2nd Scale'
                     halign: 'left'
+
+                CheckBox:
+                    id: reverseScaleCheckBox
+                    size_hint_x: 0.4
 
             TextInput:
                 id: secondScale
@@ -138,7 +142,7 @@
 
                 canvas:
                     Color:
-                        rgb: [0.7, 0.3, .6, 1]
+                        rgb: [0.3, 0.3, .6, 1]
                     Rectangle:
                         pos: self.pos
                         size: self.size
@@ -147,12 +151,12 @@
                     text: 'Based on Steps'
                     group: 'scaleConversion'
                     id: stepBasedToggle
-                    background_color: 1.2, 0.1, 0.4, 1
+                    background_color: 0.3, 0.3, .6, 1
                     disabled: not secondScaleCheckBox.active
                     state: 'down'
 
                 ToggleButton:
-                    background_color: 1.2, 0.1, 0.4, 1
+                    background_color: 0.3, 0.3, .6, 1
                     text: 'Based on Scale'
                     group: 'scaleConversion'
                     id: scaleBasedToggle
@@ -201,8 +205,9 @@
             # background_color: 0.1, 0.1, 0.1, 1
             size_hint: [None, None]
             size: [200, 100]
-            on_release: root.manager.current = 'screen1'
             on_release: root.stopMusic()
+            on_release: root.manager.current = 'screen1'
+
 
     PlayButton:
         size: self.size

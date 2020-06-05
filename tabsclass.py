@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import math
 from midiutil import MIDIFile
 from mido import MidiFile as MIDIread
 
@@ -80,9 +81,14 @@ class Tabs():
     def __init__(self, path):
 
         if (isinstance(path, pd.DataFrame)):
+            print('Loading dataframe into Tabs')
             self.tab = path
-        else:
+        elif('xlsx' in path):
+            print('Loading Excel sheet into Tabs')
             self.tab = self._loadTabs(path)
+        elif('mid' in path):
+            print('Loading MIDI file into Tabs')
+            self.tab = self._loadMIDI(path)
 
         self.notes, self.notesLoc = self._storeTabNotes()
         self.tabSteps = self._convertTabToSteps()
@@ -104,6 +110,50 @@ class Tabs():
         self.tab = tabs
 
         return tabs
+
+    def _loadMIDI(self, path):
+
+        newTab = pd.read_csv("Tabs/emptyTab.csv")
+        mf = self.readMIDI(path, False)
+
+        # Initalizing Lists
+        midiNotes = []
+        midiNoteLocations = []
+
+        for i, track in enumerate(mf.tracks):
+            cumTime = 0
+            for ii, msg in enumerate(track):
+                noteAction = str(msg).split()
+                if (not msg.is_meta):
+                    noteStatus = noteAction[0]
+                    if (i == 2):
+                        notePitch = 'S'
+                    else:
+                        notePitch =valueToNotes[int(noteAction[2][5:])]
+
+                    noteActionTime = noteAction[4]
+                    cumTime += int(noteActionTime[5:])
+
+                    # Time adjuster is used to change the tempo.
+                    # 1920 seems to be equivalent to a second in MIDI time. (e.g. reading 960 in MIDI msg is 0.5 second)
+                    timeAdjuster = 1920
+                    actualTime = cumTime / timeAdjuster
+
+                    if (noteStatus == 'note_on'):
+                        midiNotes.append(notePitch)
+                        midiNoteLocations.append((math.floor(actualTime / 2), int((actualTime % 2) * 8)))
+
+        combinedList = list(zip(midiNoteLocations, midiNotes))
+        for cord, newNote in combinedList:
+            cell = newTab.iloc[cord[0]][cord[1]].split(',')
+
+            numOfNotes = len(cell)
+            if (cell[0] == '-'):
+                newTab.iloc[cord[0]][cord[1]] = newNote
+            else:
+                newTab.iloc[cord[0]][cord[1]] += ',{}'.format(newNote)
+
+        return newTab
 
     # Method that loops over the tabs and stores the the note and corresponding location in two lists
     # Input:
@@ -309,6 +359,18 @@ class Tabs():
                 newNotes[i] = newScaleIndexToNote[tabScaleNoteToIndex[note]]
 
         return Tabs(self._replaceTabWithNewNotes(newNotes))
+
+    def readMIDI(self, path, display=False):
+
+        mid = MIDIread(path)
+
+        if (display):
+            for i, track in enumerate(mid.tracks):
+                print('Track {}: {}'.format(i, track.name))
+                for msg in track:
+                    print(msg)
+
+        return mid
 
     def writeToMIDI(self, path, tempo=120, duration=1):
 
