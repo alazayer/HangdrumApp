@@ -65,6 +65,8 @@ fsValueToNotes = {value: key for (key, value) in fsNoteToValues.items()}
 # ------------------------------------------
 # Methods:
 # - _loadTabs(path): reads tab from excel sheet. Called by constructor.
+# - _loadMIDI(path, start, end): reads a tab from MIDI format. Called by constructor
+# - cutMIDI(input, output, start, end): reads MIDI and cuts the desired section
 # - _storeTabNotes(): returns list of notes in sparse format with list of coordinates
 # - _convertTabToSteps(): computes steps between all the notes in comparison to first note
 # - _replaceTabWithNewNotes(newNotes): To place the new notes in dataframe
@@ -78,17 +80,25 @@ fsValueToNotes = {value: key for (key, value) in fsNoteToValues.items()}
 
 class Tabs():
 
-    def __init__(self, path):
+    def __init__(self, path, **kwargs):
 
         if (isinstance(path, pd.DataFrame)):
-            print('Loading dataframe into Tabs')
             self.tab = path
+            # In order to calculate song time
+            self.notes, self.notesLoc = self._storeTabNotes()
+            self.songTime = self.notesLoc[-1][0] * 2 + (self.notesLoc[-1][1] + 1) * 0.125
         elif('xlsx' in path):
-            print('Loading Excel sheet into Tabs')
+
             self.tab = self._loadTabs(path)
+            # In order to calculate song time
+            self.notes, self.notesLoc = self._storeTabNotes()
+            self.songTime = self.notesLoc[-1][0] * 2 + (self.notesLoc[-1][1] + 1) * 0.125
         elif('mid' in path):
-            print('Loading MIDI file into Tabs')
-            self.tab = self._loadMIDI(path)
+            if('startTime' in kwargs and 'endTime' in kwargs):
+                self.tab = self._loadMIDI(path, kwargs['startTime'], kwargs['endTime'])
+            else:
+                self.tab = self._loadMIDI(path)
+
 
         self.notes, self.notesLoc = self._storeTabNotes()
         self.tabSteps = self._convertTabToSteps()
@@ -111,13 +121,15 @@ class Tabs():
 
         return tabs
 
-    def _loadMIDI(self, path):
+    # Methods that read a MIDI file and outputs a tab in dataframe format
+    def _loadMIDI(self, path, startTime=0, endTime=float('inf')):
 
         newTab = pd.read_csv("Tabs/emptyTab.csv")
         mf = self.readMIDI(path, False)
 
         # Initalizing Lists
         midiNotes = []
+        midiTimes = []
         midiNoteLocations = []
 
         for i, track in enumerate(mf.tracks):
@@ -139,21 +151,30 @@ class Tabs():
                     timeAdjuster = 1920
                     actualTime = cumTime / timeAdjuster
 
+                    #In case cut is requested
+                    actualTime -= startTime
+
                     if (noteStatus == 'note_on'):
                         midiNotes.append(notePitch)
+                        midiTimes.append(actualTime)
                         midiNoteLocations.append((math.floor(actualTime / 2), int((actualTime % 2) * 8)))
 
-        combinedList = list(zip(midiNoteLocations, midiNotes))
-        for cord, newNote in combinedList:
-            cell = newTab.iloc[cord[0]][cord[1]].split(',')
+        self.songTime = actualTime+0.125 # Added 0.125 to count to the end of the note
 
-            numOfNotes = len(cell)
-            if (cell[0] == '-'):
-                newTab.iloc[cord[0]][cord[1]] = newNote
-            else:
-                newTab.iloc[cord[0]][cord[1]] += ',{}'.format(newNote)
+        combinedList = list(zip(midiNoteLocations, midiNotes, midiTimes))
+        for cord, newNote, noteTime in combinedList:
+            if(noteTime >= 0 and noteTime <= endTime-startTime):
+                cell = newTab.iloc[cord[0]][cord[1]].split(',')
+
+                numOfNotes = len(cell)
+                if (cell[0] == '-'):
+                    newTab.iloc[cord[0]][cord[1]] = newNote
+                else:
+                    newTab.iloc[cord[0]][cord[1]] += ',{}'.format(newNote)
+
 
         return newTab
+
 
     # Method that loops over the tabs and stores the the note and corresponding location in two lists
     # Input:
@@ -506,3 +527,10 @@ def readMIDI(path,display=False):
                 print(msg)
 
     return mid
+
+def cutMIDI(input, output, start=0, end=float('inf'), tempo=120):
+
+    cutMIDItab = Tabs(input, startTime=start, endTime=end)
+    cutMIDItab.writeToMIDI(output, tempo, 1) #tempo and duration
+
+    return cutMIDItab

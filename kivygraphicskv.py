@@ -34,6 +34,8 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
+from kivy.uix.slider import Slider
+from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
 from kivy.properties import StringProperty, ObjectProperty, NumericProperty
@@ -49,6 +51,7 @@ from functools import partial # to be able to load arguments in Clock
 from kivy.uix.screenmanager import ScreenManager, Screen, WipeTransition
 from kivy.app import App
 import pygame
+import math
 
 # to change the kivy default settings we use this module config
 from kivy.config import Config
@@ -70,20 +73,38 @@ class ScreenOne(Screen):
     secondScaleCheckBox = ObjectProperty()
     stepBasedToggle = ObjectProperty()
     scaleBasedToggle = ObjectProperty()
-    tempo = ObjectProperty()
     reverseScaleCheckBox = ObjectProperty()
 
 # Screen two will display the notes being played
 class ScreenTwo(Screen):
 
-    # On entering the screen
+    startTime = ObjectProperty()
+    endTime = ObjectProperty()
+    tempo = ObjectProperty()
+    # Other variables available under screen two
+    # timeBar
+    # playbutton
+    # noteButtons
+    # backbutton
+    # pausebutton
+
+    # On entering the screen we are loading everything from the main screen
     def on_enter(self, *args):
 
+        self._checkMainScreenInput()
+        self._displayNoteButtons()
+        self._loadmainMIDI()
+
+    def _checkMainScreenInput(self):
+
         # Initalizing to avoid errors in case these options were not selected
+        self.playbutton.state = 'normal'
         self.secondScale = None
         self.conversionType = None
-        formatError = False
-        self.ids['slap'].state = 'normal' # in case back button was pressed while slap was on
+        self.formatError = False
+        self.allOnScheduled = []
+        self.allOffScheduled = []
+        self.currentTime = 0
 
         # Loading the main scale and check if it is in the expected Scale class format
         # Goes back to main screen if input is in an invalid format
@@ -91,27 +112,27 @@ class ScreenTwo(Screen):
 
         try:
             self.mainScale = tabsclass.Scale(mainScaleInput)
-            scaleToDisplay = self.mainScale
+            self.scaleToDisplay = self.mainScale
         except:
             print('Format of main scale is wrong... please use commas between notes without space')
-            formatError = True
+            self.formatError = True
             App.get_running_app().root.ids.screen_manager.current = 'screen1'
 
         # Checking if user requested to convert to another scale. If box is ticked read second scale
-        secondScaleCheckBox = App.get_running_app().root.ids.screen_one.secondScaleCheckBox.state
-        reversedScaleCheckBox = App.get_running_app().root.ids.screen_one.reverseScaleCheckBox.state
+        self.secondScaleCheckBox = App.get_running_app().root.ids.screen_one.secondScaleCheckBox.state
+        self.reversedScaleCheckBox = App.get_running_app().root.ids.screen_one.reverseScaleCheckBox.state
 
-        if(secondScaleCheckBox == 'down'):
+        if(self.secondScaleCheckBox == 'down'):
             secondScaleInput = App.get_running_app().root.ids.screen_one.secondScale.text.split(',')
             try:
                 self.secondScale = tabsclass.Scale(secondScaleInput)
             except:
                 print('Format of second scale is wrong... please use commas between notes without space')
                 App.get_running_app().root.ids.screen_manager.current = 'screen1'
-                formatError = True
+                self.formatError = True
 
             # Overwrites main scale to display in second screen
-            scaleToDisplay = self.secondScale
+            self.scaleToDisplay = self.secondScale
 
             # Check which type of conversion does user want. Default is step based unless user chooses scale based
             scaleToggleState = App.get_running_app().root.ids.screen_one.scaleBasedToggle.state
@@ -120,85 +141,45 @@ class ScreenTwo(Screen):
             else:
                 self.conversionType = 'stepConversion'
 
-        # Does not display anything in second screen if main scale was not entered correctly
-        if(not formatError):
-            # Fixed positions for FloatLayout (NEEDS WORK)
-            if(reversedScaleCheckBox == 'down'):
-                xpos = [0.45,0.45,0.7,0.2,0.8,0.1,0.7,0.2,0.45]
-                ypos = [0.45,0.15,0.2,0.2,0.45,0.45,0.7,0.7,0.75]
-            else:
-                xpos = [0.45,0.45,0.2,0.7,0.1,0.8,0.2,0.7,0.45]
-                ypos = [0.45,0.15,0.2,0.2,0.45,0.45,0.7,0.7,0.75]
-
-            # Creating the notes as button and storing them in dictionary to be referenced later
-            self.noteDict = {}
-            for i, note in enumerate(scaleToDisplay.notes):
-                btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
-                self.noteDict[note] = btn # Creating new dictionary to reference each button
-                self.ids.noteButtons.add_widget(btn)
-            self.noteDict['slap'] = self.ids['slap']
-
-    # Function to stop the music and all scheduled events if 'Back' button is clicked
-    def stopMusic(self, *args):
-
-        allOnScheduled = App.get_running_app().root.ids.screen_two.ids.playbutton.allOnScheduled
-        allOffScheduled = App.get_running_app().root.ids.screen_two.ids.playbutton.allOffScheduled
-
-        # If play button was never pressed then no sound was loaded and no need to stop anything
-        try:
-            sound = App.get_running_app().root.ids.screen_two.ids.playbutton.sound
-            sound.stop()
-
-            # Unscheduling all events to avoid re-entering screen two with different buttons (KeyError)
-            allScheduled = zip(allOnScheduled, allOffScheduled)
-            for OnEvent, OffEvent in allScheduled:
-                Clock.unschedule(OnEvent)
-                Clock.unschedule(OffEvent)
-        except:
-            print('Sound not loaded')
-
-
-# A class that can be used to load the audio for each note to be played when pressed
-class NoteButton(Button):
-
-    def on_press(self):
-        print('Playing Note {}'.format(self.text))
-
-class PlayButton(Button):
-
-    # Initalize list of note events (on/off). These will be used to unschedule the events in case
-    # back or play buttons are pressed
-    def __init__(self, **kwargs):
-        super(PlayButton, self).__init__(**kwargs)
-
-        self.allOnScheduled = []
-        self.allOffScheduled = []
-
-    def on_release(self):
-
-        # Loading scales and determine which will be used
-        self.mainScale = App.get_running_app().root.ids.screen_two.mainScale
-        self.secondScale = App.get_running_app().root.ids.screen_two.secondScale
-
         if(self.secondScale == None):
             self.usedScale = self.mainScale
         else:
             self.usedScale = self.secondScale
 
-        # Retrieve dictionary with all notes displayed + desired tempo and conversion type from user
-        self.noteDict = App.get_running_app().root.ids.screen_two.noteDict
-        self.tempo = App.get_running_app().root.ids.screen_one.tempo.text
-        self.conversionType = App.get_running_app().root.ids.screen_two.conversionType
+    def _displayNoteButtons(self):
+        # Does not display anything in second screen if main scale was not entered correctly
+        if(not self.formatError):
+            # Fixed positions for FloatLayout (NEEDS WORK)
+            if(self.reversedScaleCheckBox == 'down'):
+                xpos = [0.45,0.45,0.7,0.2,0.8,0.1,0.7,0.2,0.45]
+                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+            else:
+                xpos = [0.45,0.45,0.2,0.7,0.1,0.8,0.2,0.7,0.45]
+                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+            # Creating the notes as button and storing them in dictionary to be referenced later
+            self.noteDict = {}
+            for i, note in enumerate(self.scaleToDisplay.notes):
+                btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
+                self.noteDict[note] = btn # Creating new dictionary to reference each button
+                self.ids.noteButtons.add_widget(btn)
+            self.noteDict['slap'] = self.ids['slap']
 
-        # Stop any On scheduled events in the case the play button is pressed again (Restarting music)
-        # Off events are kept to turn off any notes there were on from last play
-        for event in self.allOnScheduled:
-            Clock.unschedule(event)
+    def _loadmainMIDI(self):
 
-        # Loads the desired tabls from the path and create a Tabs class
-        self.tabsPath = App.get_running_app().root.ids.screen_one.filename.text
-        fileName = self.tabsPath.split('.')[0].split('/')[1]
-        tabsLoaded = tabsclass.Tabs(self.tabsPath)
+        # Loads the desired tabs from the path and create a Tabs class
+        tabsPath = App.get_running_app().root.ids.screen_one.filename.text
+        fileName = tabsPath.split('.')[0].split('/')[1]
+        tabsLoaded = tabsclass.Tabs(tabsPath)
+
+        self.songTime = tabsLoaded.songTime
+        print('Total time of song loaded is {}'.format(round(self.songTime,1)))
+
+        # setting default times
+        self.startTime.text = '0'
+        self.endTime.text = str(round_up(self.songTime,1))
+        self.timeBar.value = 0
+        self.timeBar.max = math.ceil(self.songTime)
+
 
         # If conversion to secondary scale is desired, Tabs class is used to change to the new tabs
         if(self.conversionType == 'scaleConversion'):
@@ -207,33 +188,16 @@ class PlayButton(Button):
             Melody, Missed, Best = tabsLoaded.applyScaleToTab(self.secondScale, True, False)
             tabsLoaded = tabsclass.Tabs(Melody[Best])
 
-        # MIDI file is stored, loaded and played
-        self.midiPath = "MIDI/" + fileName + '.mid'
-        tabsLoaded.writeToMIDI(self.midiPath, int(self.tempo), 1)
-        # self.sound = SoundLoader.load(self.midiPath)
 
-        print('Playing {} at a tempo of {} '.format(fileName, self.tempo))
-        self.play_with_pygame(self.midiPath)
-
-        # Calls function to display the notes
-        self.displayMIDI()
-
-    def play_with_pygame(self, song):
-        pygame.init()
-        pygame.mixer.music.load(song)
-        pygame.mixer.music.load('MIDI/LandOfColeHDtabs.mp3')
-        self.sound = pygame.mixer.music
-        length = pygame.time.get_ticks()
-        print('Length of song is: {}'.format(length))
-        self.sound.play()
-        # length = pygame.time.get_ticks()
-        #while self.sound.get_busy():
-        #    pygame.time.Clock().tick(length)
+        # Main MIDI file is stored if read from xlsx file
+        if('xlsx' in tabsPath):
+            self.midiPath = "MIDI/" + fileName + '.mid'
+            tabsLoaded.writeToMIDI(self.midiPath, float(self.tempo.text), 1)
 
     def displayMIDI(self):
 
         # reads the MIDI file
-        midiFile = tabsclass.readMIDI(self.midiPath, False)
+        midiFile = tabsclass.readMIDI('MIDI/temp.mid', False)
 
         # Loops through each track and schedules each event (Note on or off) using the Clock class
         # MIDI message that have '<meta' are excluded. Format of msgs: note_event channel=# note=# velocity=# time=#
@@ -257,33 +221,175 @@ class PlayButton(Button):
 
                     # Time adjuster is used to change the tempo.
                     # 1920 seems to be equivalent to a second in MIDI time. (e.g. reading 960 in MIDI msg is 0.5 second)
-                    timeAdjuster = 1920*(int(self.tempo)/120)
+
+                    timeAdjuster = 1920*(float(self.tempo.text)/120)
+
                     if (noteStatus == 'note_on'):
                         # print('Turning off note {} at time {}'.format(notePitch, cumTime / timeAdjuster))
-                        onEvent = Clock.schedule_once(partial(self.pressButton, notePitch), self.cumTime / timeAdjuster)
+                        # onEvent = Clock.schedule_once(partial(self.pressButton, notePitch), self.cumTime / timeAdjuster)
+                        onEvent = Clock.schedule_once(self.noteDict[notePitch].on_press, self.cumTime / timeAdjuster)
                         self.allOnScheduled.append(onEvent)
                     elif (noteStatus == 'note_off'):
                         # print('Turning off note {} at time {}'.format(notePitch, cumTime / timeAdjuster))
-                        offEvent = Clock.schedule_once(partial(self.releaseButton, notePitch), (self.cumTime - 100) / timeAdjuster)
+                        # offEvent = Clock.schedule_once(partial(self.releaseButton, notePitch), (self.cumTime - 100) / timeAdjuster)
+                        offEvent = Clock.schedule_once(self.noteDict[notePitch].on_release, (self.cumTime - 100) / timeAdjuster)
                         self.allOffScheduled.append(offEvent)
 
-    # Function called to light up a button (note)
-    def pressButton(self, *args):
-        self.noteDict[args[0]].state = "down"
-        print('Current time is: {}'.format(self.sound.get_pos()))
-        #self.sound.set_pos(2)
+# A class that can be used to load the audio for each note to be played when pressed
+class NoteButton(Button):
 
-    # Function called to turn off a button (note)
-    def releaseButton(self, *args):
-        self.noteDict[args[0]].state = "normal"
-        # print('Current time is: {}'.format(self.sound.get_pos()))
+    def on_press(self, *args):
+        self.state = 'down'
+        # print('Playing Note {}'.format(self.text))
 
+    def on_release(self, *args):
+        self.state = 'normal'
+        # print('Releasing Note {}'.format(self.text))
+
+class TimeBar(Slider):
+
+    def increment_time(self, interval):
+
+        screenTwo = App.get_running_app().root.ids.screen_two
+
+        screenTwo.currentTime += interval*(float(screenTwo.tempo.text)/120)
+        if(screenTwo.currentTime <= screenTwo.songTime):
+            screenTwo.timeBar.value = round_up(screenTwo.currentTime,1)
+        else:
+            screenTwo.timeBar.value = screenTwo.songTime
+            Clock.unschedule(screenTwo.timeBar.increment_time)
+
+    def on_touch_down(self, touch):
+
+        timeBarValue = str(round_up(App.get_running_app().root.ids.screen_two.ids.timeBar.value,1))
+        if self.collide_point(*touch.pos):
+            App.get_running_app().root.ids.screen_two.startTime.text = timeBarValue
+            # App.get_running_app().root.ids.screen_two.pausebutton.on_release()
+            App.get_running_app().root.ids.screen_two.playbutton.pauseButtonAction()
+
+        return super(TimeBar, self).on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+
+        if self.collide_point(*touch.pos):
+            timeBarValue = str(round_up(App.get_running_app().root.ids.screen_two.ids.timeBar.value,1))
+            App.get_running_app().root.ids.screen_two.startTime.text = timeBarValue
+
+        return super(TimeBar, self).on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+
+        timeBarValue = str(round_up(App.get_running_app().root.ids.screen_two.ids.timeBar.value,1))
+
+        if self.collide_point(*touch.pos):
+            App.get_running_app().root.ids.screen_two.startTime.text = timeBarValue
+
+        return super(TimeBar, self).on_touch_up(touch)
+
+class PlayButton(ToggleButton):
+
+    def on_release(self):
+        if(self.state == 'down'):
+            self.playButtonAction()
+        elif(self.state == 'normal'):
+            self.pauseButtonAction()
+
+    def playButtonAction(self):
+
+        # Make sure state is normal
+        self.state = 'down'
+
+        # Retrieve running screen two class
+        screenTwo = App.get_running_app().root.ids.screen_two
+
+        # Stop any On scheduled events in the case the play button is pressed again (Restarting music)
+        # Off events are kept to turn off any notes there were on from last play
+        for event in screenTwo.allOnScheduled:
+            Clock.unschedule(event)
+
+        startTime = float(screenTwo.startTime.text)
+        endTime = float(screenTwo.endTime.text)
+        tempo = float(screenTwo.tempo.text)
+
+        # Constraining start and end times
+        if(startTime >= screenTwo.songTime or startTime < 0):
+            App.get_running_app().root.ids.screen_two.startTime.text = '0'
+            startTime = 0
+
+        if(endTime < startTime or endTime > screenTwo.songTime):
+            endTime = screenTwo.songTime
+            App.get_running_app().root.ids.screen_two.endTime.text = str(round_up(screenTwo.songTime,1))
+
+        # Checking if cut required. Always stores new MIDI file called 'temp' and is played
+        tabsclass.cutMIDI(screenTwo.midiPath,'MIDI/temp.mid', startTime, endTime, tempo)
+        print('Playing {} at a tempo of {} from {} to {}'.format(screenTwo.midiPath,tempo, startTime, endTime))
+        screenTwo.sound = self.playMusic('MIDI/temp.mid')
+
+        # Loading current time in watch.
+        screenTwo.currentTime = startTime
+        Clock.unschedule(screenTwo.timeBar.increment_time)
+        Clock.schedule_interval(screenTwo.timeBar.increment_time, 0.1)
+
+        # Calls function to display the notes
+        screenTwo.displayMIDI()
+
+    def playMusic(self, song):
+        pygame.init()
+        pygame.mixer.music.load(song)
+        self.sound = pygame.mixer.music
+        self.sound.play()
+
+        return self.sound
+
+    def pauseButtonAction(self):
+
+        self.state = 'normal'
+
+        screenTwo = App.get_running_app().root.ids.screen_two
+
+        if(screenTwo.currentTime > screenTwo.songTime):
+            screenTwo.currentTime = screenTwo.songTime
+
+        screenTwo.startTime.text = str(round_up(screenTwo.currentTime,1))
+        # to stop music
+        self.stopMusic()
+
+    def stopMusic(self):
+
+        screenTwo = App.get_running_app().root.ids.screen_two
+
+        for note, noteButton in screenTwo.noteDict.items():
+            noteButton.state = 'normal'
+
+        Clock.unschedule(screenTwo.timeBar.increment_time)
+        # If play button was never pressed then no sound was loaded and no need to stop anything
+        try:
+            screenTwo.sound.stop()
+
+            # Unscheduling all events to avoid re-entering screen two with different buttons (KeyError)
+            allScheduled = zip(screenTwo.allOnScheduled, screenTwo.allOffScheduled)
+            for OnEvent, OffEvent in allScheduled:
+                Clock.unschedule(OnEvent)
+                Clock.unschedule(OffEvent)
+        except:
+            print('Sound not loaded')
+
+class BackButton(Button):
+
+    def on_release(self):
+
+        App.get_running_app().root.ids.screen_two.playbutton.stopMusic()
+
+        App.get_running_app().root.ids.screen_manager.current = 'screen1'
+
+def round_up(n, decimals=0):
+    multiplier = 10 ** decimals
+    return math.ceil(n * multiplier) / multiplier
 
 class MainLayout(StackLayout):
     pass
 
 class graphicsApp(App):
-
     def build(self):
         return MainLayout()
 
