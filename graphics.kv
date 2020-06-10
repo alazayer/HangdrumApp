@@ -17,6 +17,13 @@
     background_normal: 'Imgs/playButton.png'
     background_down: 'Imgs/pauseButton.png'
 
+<LoopButton>:
+    size: self.size
+    size_hint: [None, None]
+    size: [150, 150]
+    background_normal: 'Imgs/loopButton.png'
+    background_down: 'Imgs/loopButtonPressed.png'
+
 <BackButton>:
     # color: 1,1,1,0.5
     # background_color: 0.1, 0.1, 0.1, 1
@@ -185,7 +192,7 @@
     playbutton: playbutton
     noteButtons: noteButtons
     backbutton: backbutton
-    # pausebutton: pausebutton
+    loopbutton: loopbutton
 
     canvas:
         Color:
@@ -221,6 +228,11 @@
 
     PlayButton:
         id: playbutton
+
+    LoopButton:
+        id: loopbutton
+        size: 100, 100
+        pos_hint: {"x":0.1, "y":0}
 
     GridLayout:
 

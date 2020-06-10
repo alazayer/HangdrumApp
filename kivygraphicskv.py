@@ -48,7 +48,7 @@ from kivy.uix.checkbox import CheckBox
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from functools import partial # to be able to load arguments in Clock
-from kivy.uix.screenmanager import ScreenManager, Screen, WipeTransition
+from kivy.uix.screenmanager import ScreenManager, Screen, WipeTransition, SlideTransition
 from kivy.app import App
 import pygame
 import math
@@ -87,6 +87,7 @@ class ScreenTwo(Screen):
     # noteButtons
     # backbutton
     # pausebutton
+    # loopbutton
 
     # On entering the screen we are loading everything from the main screen
     def on_enter(self, *args):
@@ -99,6 +100,7 @@ class ScreenTwo(Screen):
 
         # Initalizing to avoid errors in case these options were not selected
         self.playbutton.state = 'normal'
+        self.loopbutton.state = 'normal'
         self.secondScale = None
         self.conversionType = None
         self.formatError = False
@@ -258,6 +260,7 @@ class TimeBar(Slider):
         else:
             screenTwo.timeBar.value = screenTwo.songTime
             Clock.unschedule(screenTwo.timeBar.increment_time)
+            screenTwo.playbutton.state = 'normal'
 
     def on_touch_down(self, touch):
 
@@ -288,13 +291,26 @@ class TimeBar(Slider):
 
 class PlayButton(ToggleButton):
 
+
     def on_release(self):
+
+        screenTwo = App.get_running_app().root.ids.screen_two
+
         if(self.state == 'down'):
-            self.playButtonAction()
+            if(screenTwo.loopbutton.state == 'normal'):
+                self.playButtonAction()
+            elif(screenTwo.loopbutton.state == 'down'):
+                loopTime = (float(screenTwo.endTime.text) - float(screenTwo.startTime.text))*(120/float(screenTwo.tempo.text))
+                self.playButtonAction()
+                self.loopEvent = Clock.schedule_interval(self.playButtonAction, loopTime)
+                print('Scheduling loop event: {}'.format(self.loopEvent))
+
+
         elif(self.state == 'normal'):
+
             self.pauseButtonAction()
 
-    def playButtonAction(self):
+    def playButtonAction(self, *args):
 
         # Make sure state is normal
         self.state = 'down'
@@ -347,6 +363,9 @@ class PlayButton(ToggleButton):
 
         screenTwo = App.get_running_app().root.ids.screen_two
 
+        # Stoping scheduled loops
+        screenTwo.loopbutton.unscheduleLoops()
+
         if(screenTwo.currentTime > screenTwo.songTime):
             screenTwo.currentTime = screenTwo.songTime
 
@@ -357,6 +376,9 @@ class PlayButton(ToggleButton):
     def stopMusic(self):
 
         screenTwo = App.get_running_app().root.ids.screen_two
+
+        # Stoping scheduled loops
+        screenTwo.loopbutton.unscheduleLoops()
 
         for note, noteButton in screenTwo.noteDict.items():
             noteButton.state = 'normal'
@@ -374,13 +396,34 @@ class PlayButton(ToggleButton):
         except:
             print('Sound not loaded')
 
+class LoopButton(ToggleButton):
+
+    def on_release(self):
+
+        if (self.state == 'normal'):
+            self.unscheduleLoops()
+
+    def unscheduleLoops(self):
+
+        self.state == 'normal'
+        # Incase play has not been pressed
+        try:
+            loopEvent = App.get_running_app().root.ids.screen_two.playbutton.loopEvent
+
+            print('Unscheduling loop event: {}'.format(loopEvent))
+            Clock.unschedule(loopEvent)
+        except:
+            pass
+
 class BackButton(Button):
 
     def on_release(self):
 
         App.get_running_app().root.ids.screen_two.playbutton.stopMusic()
 
+        App.get_running_app().root.ids.screen_manager.transition = SlideTransition(direction='right')
         App.get_running_app().root.ids.screen_manager.current = 'screen1'
+        App.get_running_app().root.ids.screen_manager.transition = SlideTransition(direction='left')
 
 def round_up(n, decimals=0):
     multiplier = 10 ** decimals
