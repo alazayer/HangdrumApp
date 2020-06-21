@@ -1,4 +1,38 @@
 ############# BUTTON TEMPLATES ###############
+
+<BrowseButton>:
+    size: [50, 100]
+
+<BrowseWindow>:
+    id: browsewindow
+    browsewindow: browsewindow
+    label: label
+
+    orientation: 'vertical'
+
+    FileChooserListView:
+        id: filechooser
+        path: "/Users/3ala2/PycharmProjects/Hangdrum/userAccessFolder"
+        on_selection: browsewindow.selected(filechooser.selection)
+
+    Label:
+        id: label
+        text: ''
+        color: 0,0,0,1
+        size_hint_y: .1
+        canvas.before:
+            Color:
+                rgb: 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+    Button:
+        id: popup_btn_cancel
+        text: 'Load'
+        size_hint_y: .1
+        on_release: root.dismiss_popup()
+
 <NoteButton>:
     size_hint: [None, None]
     size: [160, 160]
@@ -17,6 +51,13 @@
     background_normal: 'Imgs/playButton.png'
     background_down: 'Imgs/pauseButton.png'
 
+<RecordButton>:
+    size: self.size
+    size_hint: [None, None]
+    size: [150, 150]
+    background_normal: 'Imgs/recordButton.png'
+    background_down: 'Imgs/pauseButton.png'
+
 <LoopButton>:
     size: self.size
     size_hint: [None, None]
@@ -32,6 +73,9 @@
     background_normal: 'Imgs/backButton.png'
     background_down: 'Imgs/backButton.png'
 
+
+
+
 ############# SCREEN MANAGER LAYOUT ###############
 <MainLayout>
     id: mainlayout
@@ -42,6 +86,7 @@
         # Links between .py file and .kv file
         screen_one: screen_one
         screen_two: screen_two
+        screen_three: screen_three
 
         ScreenOne:
             id: screen_one
@@ -51,6 +96,11 @@
         ScreenTwo:
             id: screen_two
             name: 'screen2'
+            manager: screen_manager
+
+        ScreenThree:
+            id: screen_three
+            name: 'screen3'
             manager: screen_manager
 
 
@@ -63,6 +113,9 @@
     stepBasedToggle: stepBasedToggle
     scaleBasedToggle: scaleBasedToggle
     reverseScaleCheckBox: reverseScaleCheckBox
+    browseFile: browseFile
+    browseMainScale: browseMainScale
+    browseSecondScale: browseSecondScale
 
     canvas:
         Color:
@@ -85,7 +138,7 @@
                 size: self.size
 
         GridLayout:
-            rows: 3
+            rows: 4
             cols: 2
             # size: root.width - 200, root.height - 200
             # size_hint: [None, None]
@@ -100,20 +153,44 @@
             Label:
                 text: "File Path:"
 
-            TextInput:
-                id: filename
-                text: 'Tabs/LandOfColeHDtabs.xlsx'
+            GridLayout:
+
+                cols:2
+
+                TextInput:
+                    id: filename
+                    text: ''
+                    path: ''
+
+                BrowseButton:
+                    size_hint_x: 0.1
+                    text: 'V'
+                    id: browseFile
+                    title: 'Browse File...'
+
 
             Label:
                 text: "Main Scale:"
                 halign: 'center'
 
-            TextInput:
-                id: mainScale
-                text: 'D3,A3,Bb3,C4,D4,E4,F4,G4,A4'
+            GridLayout:
+
+                cols:2
+
+                TextInput:
+                    id: mainScale
+                    text: ''
+                    path: ''
+
+                BrowseButton:
+                    size_hint_x: 0.1
+                    text: 'V'
+                    id: browseMainScale
+                    title: 'Browse Main Scale...'
 
             GridLayout:
-                cols: 3
+
+                cols:2
 
                 canvas.before:
                     Color:
@@ -130,57 +207,74 @@
                     text: 'Convert to 2nd Scale'
                     halign: 'left'
 
-                CheckBox:
-                    id: reverseScaleCheckBox
-                    size_hint_x: 0.4
 
-            TextInput:
-                id: secondScale
-                text: 'B2,C4,C#4,D4,E4,F#4,G4,B4,C#5'
-                background_disabled_normal: ""
+            GridLayout:
+
+                cols: 2
+
+                TextInput:
+                    id: secondScale
+                    text: ''
+                    path: ''
+                    background_disabled_normal: ""
+                    disabled: not secondScaleCheckBox.active
+
+                BrowseButton:
+                    size_hint_x: 0.1
+                    text: 'V'
+                    id: browseSecondScale
+                    title: 'Browse Second Scale...'
+
+            # canvas:
+             #   Color:
+             #       rgb: [0.3, 0.3, .6, 1]
+             #   Rectangle:
+             #       pos: self.pos
+             #       size: self.size
+
+            ToggleButton:
+                text: 'Based on Steps'
+                group: 'scaleConversion'
+                id: stepBasedToggle
+                background_color: 0.3, 0.3, .6, 1
+                disabled: not secondScaleCheckBox.active
+                state: 'down'
+
+            ToggleButton:
+                background_color: 0.3, 0.3, .6, 1
+                text: 'Based on Scale'
+                group: 'scaleConversion'
+                id: scaleBasedToggle
                 disabled: not secondScaleCheckBox.active
 
         GridLayout:
             id: loadingBar
-            cols: 2
-            rows: 1
+            rows: 2
             size: root.width - 400, root.height - 1000
             pos: 200, 200
             size_hint: [None, None]
 
+            ToggleButton:
+                text: 'Reverse Displayed Scale'
+                background_color: 2, 1, 0, 1
+                id: reverseScaleCheckBox
+                size_hint_x: 0.4
+
             GridLayout:
-                rows:2
 
-                canvas:
-                    Color:
-                        rgb: [0.3, 0.3, .6, 1]
-                    Rectangle:
-                        pos: self.pos
-                        size: self.size
+                cols: 2
 
-                ToggleButton:
-                    text: 'Based on Steps'
-                    group: 'scaleConversion'
-                    id: stepBasedToggle
-                    background_color: 0.3, 0.3, .6, 1
-                    disabled: not secondScaleCheckBox.active
-                    state: 'down'
+                Button:
+                    id: loadButton
+                    text: "Load"
+                    background_color: 0.2, 0.8, 0.4, 1
+                    on_release: root.manager.current = 'screen2'
 
-                ToggleButton:
-                    background_color: 0.3, 0.3, .6, 1
-                    text: 'Based on Scale'
-                    group: 'scaleConversion'
-                    id: scaleBasedToggle
-                    disabled: not secondScaleCheckBox.active
-
-
-            Button:
-                text: "Load"
-                background_color: 0.2, 0.8, 0.4, 1
-                # size: 500, 200
-                # size_hint: [None, None]
-                # pos_hint: {"x":0.6, "y":0.5}
-                on_release: root.manager.current = 'screen2'
+                Button:
+                    id: recordButton
+                    text: "Record"
+                    background_color: 0.8, 0.2, 0, 1
+                    on_release: root.manager.current = 'screen3'
 
 ############# SCREEN 2 LAYOUT ############
 <ScreenTwo>
@@ -201,6 +295,26 @@
             source: 'Imgs/Hangdrum_Pic.png'
             pos: 250,300
             size: root.width-500, root.height-400
+
+    canvas:
+        StencilPush
+
+        StencilUse
+
+        StencilUnUse
+
+        StencilPop
+        Color:
+            rgb: [1, 0, 0]
+        Ellipse:
+            pos: 210,270
+            size: root.width-400, root.height-300
+
+        Color:
+            rgb: [0, 0, 0]
+        Ellipse:
+            pos: 220,280
+            size: root.width-420, root.height-320
 
     AnchorLayout:
         anchor_x: 'left'
@@ -282,7 +396,83 @@
         TextInput:
             id: endTime
 
+########### SCREEN 3 ##########
+<ScreenThree>
+
+    noteButtonsRecord: noteButtonsRecord
+    recordbutton: recordbutton
+    tempoRec: tempoRec
+    fileToSave: fileToSave
+    tabOutput: tabOutput
 
 
+    Label:
+        id: tabOutput
+        pos_hint: {"x":0, "y":-0.35}
+        text: ''
+
+    AnchorLayout:
+        anchor_x: 'left'
+        anchor_y: 'top'
+
+        BackButton:
+            id: backbuttonS3
+
+    RecordButton:
+        id: recordbutton
+
+
+    GridLayout:
+
+        size: root.width/1.2, 50
+        size_hint: [None, None]
+        pos_hint: {"x":0.1, "y":0.02}
+
+        cols: 4
+
+        Label:
+            size: 200,50
+            size_hint: [None, None]
+            text: "Filename:"
+
+        TextInput:
+            id: fileToSave
+            text: 'newRecordedTab'
+            size: 10,5
+
+        Label:
+            size: 150,50
+            size_hint: [None, None]
+            text: "Tempo:"
+
+        TextInput:
+            id: tempoRec
+            size: 200,50
+            size_hint: [None, None]
+            text: '120'
+
+    ################# ALL NOTES #################
+    # FloatLayout where notes will be stored
+    FloatLayout:
+
+        id: noteButtonsRecord
+
+        NoteButton:
+            id: slapRecord
+            text: 'S'
+            color: 0,0,0,1
+            size: [150, 150]
+            pos_hint: {"x":0.33, "y":0.43}
+            background_normal: 'Imgs/slapButton.png'
+            background_down: 'Imgs/slapButtonPressed.png'
+
+        NoteButton:
+            id: blankRecord
+            text: '-'
+            color: 0,0,0,1
+            size: [150, 150]
+            pos_hint: {"x":0.66, "y":0.43}
+            background_normal: 'Imgs/slapButton.png'
+            background_down: 'Imgs/slapButtonPressed.png'
 
 

@@ -26,6 +26,12 @@ from kivy.app import App
 
 # For features
 import tabsclass
+import pandas as pd
+import numpy as np
+from kivy.uix.popup import Popup
+import csv
+import os
+from os.path import sep, expanduser, isdir, dirname
 from kivy.uix.label import Label
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -64,6 +70,8 @@ Config.set('graphics', 'resizable', True)
 class Manager(ScreenManager):
     screen_one = ObjectProperty(None)
     screen_two = ObjectProperty(None)
+    screen_three = ObjectProperty(None)
+    popup_window = ObjectProperty(None)
 
 # Screen one class will be responsible for taking all input from user
 class ScreenOne(Screen):
@@ -110,7 +118,8 @@ class ScreenTwo(Screen):
 
         # Loading the main scale and check if it is in the expected Scale class format
         # Goes back to main screen if input is in an invalid format
-        mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
+        mainScaleInput = self.readScaleCSV(App.get_running_app().root.ids.screen_one.mainScale.path)
+        #mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
 
         try:
             self.mainScale = tabsclass.Scale(mainScaleInput)
@@ -122,10 +131,12 @@ class ScreenTwo(Screen):
 
         # Checking if user requested to convert to another scale. If box is ticked read second scale
         self.secondScaleCheckBox = App.get_running_app().root.ids.screen_one.secondScaleCheckBox.state
-        self.reversedScaleCheckBox = App.get_running_app().root.ids.screen_one.reverseScaleCheckBox.state
+        self.reverseScaleCheckBox = App.get_running_app().root.ids.screen_one.reverseScaleCheckBox.state
 
         if(self.secondScaleCheckBox == 'down'):
-            secondScaleInput = App.get_running_app().root.ids.screen_one.secondScale.text.split(',')
+
+            secondScaleInput = self.readScaleCSV(App.get_running_app().root.ids.screen_one.secondScale.path)
+            #secondScaleInput = App.get_running_app().root.ids.screen_one.secondScale.text.split(',')
             try:
                 self.secondScale = tabsclass.Scale(secondScaleInput)
             except:
@@ -152,7 +163,7 @@ class ScreenTwo(Screen):
         # Does not display anything in second screen if main scale was not entered correctly
         if(not self.formatError):
             # Fixed positions for FloatLayout (NEEDS WORK)
-            if(self.reversedScaleCheckBox == 'down'):
+            if(self.reverseScaleCheckBox == 'down'):
                 xpos = [0.45,0.45,0.7,0.2,0.8,0.1,0.7,0.2,0.45]
                 ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
             else:
@@ -164,23 +175,25 @@ class ScreenTwo(Screen):
                 btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
                 self.noteDict[note] = btn # Creating new dictionary to reference each button
                 self.ids.noteButtons.add_widget(btn)
+            # slap is always added separately (Not related to input)
             self.noteDict['slap'] = self.ids['slap']
 
     def _loadmainMIDI(self):
 
         # Loads the desired tabs from the path and create a Tabs class
-        tabsPath = App.get_running_app().root.ids.screen_one.filename.text
-        fileName = tabsPath.split('.')[0].split('/')[1]
+        filename = App.get_running_app().root.ids.screen_one.filename
+        tabsPath = filename.path
+        self.fileName = filename.text
         tabsLoaded = tabsclass.Tabs(tabsPath)
 
         self.songTime = tabsLoaded.songTime
-        print('Total time of song loaded is {}'.format(round(self.songTime,1)))
+        print('Total time of song loaded is {}'.format(round_up(self.songTime,1)))
 
         # setting default times
         self.startTime.text = '0'
         self.endTime.text = str(round_up(self.songTime,1))
         self.timeBar.value = 0
-        self.timeBar.max = math.ceil(self.songTime)
+        self.timeBar.max = round_up(self.songTime,1)
 
 
         # If conversion to secondary scale is desired, Tabs class is used to change to the new tabs
@@ -191,15 +204,13 @@ class ScreenTwo(Screen):
             tabsLoaded = tabsclass.Tabs(Melody[Best])
 
 
-        # Main MIDI file is stored if read from xlsx file
-        if('xlsx' in tabsPath):
-            self.midiPath = "MIDI/" + fileName + '.mid'
-            tabsLoaded.writeToMIDI(self.midiPath, float(self.tempo.text), 1)
+        # Write tempMainMIDI file in case it was converted
+        tabsLoaded.writeToMIDI('MIDI/tempMain.mid', float(self.tempo.text), 1)
 
     def displayMIDI(self):
 
         # reads the MIDI file
-        midiFile = tabsclass.readMIDI('MIDI/temp.mid', False)
+        midiFile = tabsclass.readMIDI('MIDI/tempCut.mid', False)
 
         # Loops through each track and schedules each event (Note on or off) using the Clock class
         # MIDI message that have '<meta' are excluded. Format of msgs: note_event channel=# note=# velocity=# time=#
@@ -228,25 +239,224 @@ class ScreenTwo(Screen):
 
                     if (noteStatus == 'note_on'):
                         # print('Turning off note {} at time {}'.format(notePitch, cumTime / timeAdjuster))
-                        # onEvent = Clock.schedule_once(partial(self.pressButton, notePitch), self.cumTime / timeAdjuster)
                         onEvent = Clock.schedule_once(self.noteDict[notePitch].on_press, self.cumTime / timeAdjuster)
                         self.allOnScheduled.append(onEvent)
                     elif (noteStatus == 'note_off'):
                         # print('Turning off note {} at time {}'.format(notePitch, cumTime / timeAdjuster))
-                        # offEvent = Clock.schedule_once(partial(self.releaseButton, notePitch), (self.cumTime - 100) / timeAdjuster)
                         offEvent = Clock.schedule_once(self.noteDict[notePitch].on_release, (self.cumTime - 100) / timeAdjuster)
                         self.allOffScheduled.append(offEvent)
+
+    def readScaleCSV(self, path):
+        with open(path) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            for row in csv_reader:
+                scale = row
+
+        return scale
+    # userAccessFolder/Scales/AliScale.csv
+
+class ScreenThree(Screen):
+
+    # variables
+    # ---------
+    #     noteButtonsRecord
+    #     recordbutton
+    #     tempoRec
+    #     fileToSave
+    #     tabOutput
+
+    def on_enter(self, *args):
+        self._checkMainScreenInput()
+        self._displayNoteButtons()
+
+    def _checkMainScreenInput(self):
+
+        # Initalizing to avoid errors in case these options were not selected
+        self.formatError = False
+        self.currentTime = 0
+        self.tabOutput.text = ''
+
+        self.reverseScaleCheckBox = App.get_running_app().root.ids.screen_one.reverseScaleCheckBox.state
+
+        # Loading the main scale and check if it is in the expected Scale class format
+        # Goes back to main screen if input is in an invalid format
+        mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
+
+        try:
+            self.mainScale = tabsclass.Scale(mainScaleInput)
+            self.scaleToDisplay = self.mainScale
+        except:
+            print('Format of main scale is wrong... please use commas between notes without space')
+            self.formatError = True
+            App.get_running_app().root.ids.screen_manager.current = 'screen1'
+
+
+    def _displayNoteButtons(self):
+        # Does not display anything in second screen if main scale was not entered correctly
+        if (not self.formatError):
+            # Fixed positions for FloatLayout (NEEDS WORK)
+            if (self.reverseScaleCheckBox == 'down'):
+                xpos = [0.45, 0.45, 0.7, 0.2, 0.8, 0.1, 0.7, 0.2, 0.45]
+                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+            else:
+                xpos = [0.45, 0.45, 0.2, 0.7, 0.1, 0.8, 0.2, 0.7, 0.45]
+                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+            # Creating the notes as button and storing them in dictionary to be referenced later
+            self.noteDict = {}
+            for i, note in enumerate(self.scaleToDisplay.notes):
+                btn = NoteButton(text=note, pos_hint={'x': xpos[i], 'y': ypos[i]})
+                self.noteDict[note] = btn  # Creating new dictionary to reference each button
+                self.ids.noteButtonsRecord.add_widget(btn)
+            self.noteDict['slapRecord'] = self.ids['slapRecord']
+
+##### FOR THE FILE CHOOSER POP-OUT ####
+
+class BrowseWindow(BoxLayout):
+
+    def __init__(self, title=None):
+        self.title = title
+
+        super(BoxLayout, self).__init__()
+
+    def selected(self, filename):
+
+        screenOne = App.get_running_app().root.ids.screen_one
+        try:
+            self.label.text = filename[0]
+
+            if (self.title == 'Browse File...'):
+                screenOne.filename.text = filename[0].split('/')[-1]
+                screenOne.filename.path = filename[0]
+            elif(self.title == 'Browse Main Scale...'):
+                screenOne.mainScale.text = filename[0].split('/')[-1]
+                screenOne.mainScale.path = filename[0]
+            elif (self.title == 'Browse Second Scale...'):
+                screenOne.secondScale.text = filename[0].split('/')[-1]
+                screenOne.secondScale.path = filename[0]
+        except:
+            pass
+
+    def dismiss_popup(self):
+
+        try:
+            if (self.title == 'Browse File...'):
+                App.get_running_app().root.ids.screen_one.browseFile.popupWindow.dismiss()
+            elif (self.title == 'Browse Main Scale...'):
+                App.get_running_app().root.ids.screen_one.browseMainScale.popupWindow.dismiss()
+            elif (self.title == 'Browse Second Scale...'):
+                App.get_running_app().root.ids.screen_one.browseSecondScale.popupWindow.dismiss()
+        except:
+            pass
+
+class BrowseButton(Button):
+
+    def on_release(self):
+        self.show_popup()
+
+    def show_popup(self):
+        show = BrowseWindow(self.title) # Create a new instance of the P class
+        self.popupWindow = Popup(title=self.title, content=show, size_hint=(None,None),size=(1200,800))
+        # Create the popup window
+
+        self.popupWindow.open() # show the popup
+
+####### NOT IMPLEMENTED ###########
+class loadRecordButton(Button):
+
+    def on_release(self):
+
+        self.loadFunction()
+
+        self.recordFunction()
+
+    def loadFunction(self):
+        pass
+
+    def recordFunction(self):
+        pass
+####### END NOT IMPLEMENTED ###########
+
+class RecordButton(ToggleButton):
+
+    def on_release(self):
+        if(self.state == 'down'):
+            # Initialize recorded notes
+            self.recordedNotes = []
+
+        elif(self.state == 'normal'):
+
+            try:
+                self.recordedNotes[0] # To test if anything has been recorded
+                self.recordMIDI()
+            except:
+                print('Nothing has been recorded')
+
+    def recordMIDI(self):
+
+        screenThree = App.get_running_app().root.ids.screen_three
+
+        screenThree.tabOutput.text = ''
+
+        numOfNotes = len(self.recordedNotes)
+        numRows, notesOnLastRow = divmod(numOfNotes,16)
+
+        header = 'o,oe,oen,oend,t,te,ten,tend,th,the,then,thend,f,fe,fen,fend'.split(',')
+        newRecordedTabs = pd.DataFrame('-', index=np.arange(numRows+1*notesOnLastRow), columns=header)
+
+        noteCounter = 0
+
+        for r in np.arange(0, numRows+1):
+            for c in np.arange(0,16):
+
+                if (r == numRows and c == notesOnLastRow):
+                    break
+
+                if(self.recordedNotes[noteCounter] != '-'):
+                        newRecordedTabs.iloc[r][c] = self.recordedNotes[noteCounter]
+
+                noteCounter += 1
+
+        midiPath = "userAccessFolder/MIDI/" + screenThree.fileToSave.text + '.mid'
+        csvPath =  "userAccessFolder/Tabs/" + screenThree.fileToSave.text + '.csv'
+
+        # Creating Tabs class with new tabs
+        newTabsClass = tabsclass.Tabs(newRecordedTabs)
+
+        newTabsClass.tab.to_csv(csvPath, index=False, header=False)
+        newTabsClass.writeToMIDI(midiPath,int(screenThree.tempoRec.text))
 
 # A class that can be used to load the audio for each note to be played when pressed
 class NoteButton(Button):
 
+
     def on_press(self, *args):
+
+        screenThree = App.get_running_app().root.ids.screen_three
+
+        if(screenThree.recordbutton.state == 'down'):
+            print('Pressing Note {}'.format(self.text))
+            screenThree.recordbutton.recordedNotes.append(self.text)
+            screenThree.tabOutput.text = self.listToString(screenThree.recordbutton.recordedNotes)
+
+
         self.state = 'down'
-        # print('Playing Note {}'.format(self.text))
+
+    def listToString(self,list):
+
+        stringToOutput = ''
+        for i, entry in enumerate(list):
+            if((i+1) % 16 == 0):
+                stringToOutput += entry + '\n'
+            else:
+                stringToOutput += entry + ','
+
+
+
+        return stringToOutput
 
     def on_release(self, *args):
+
         self.state = 'normal'
-        # print('Releasing Note {}'.format(self.text))
 
 class TimeBar(Slider):
 
@@ -258,7 +468,7 @@ class TimeBar(Slider):
         if(screenTwo.currentTime <= screenTwo.songTime):
             screenTwo.timeBar.value = round_up(screenTwo.currentTime,1)
         else:
-            screenTwo.timeBar.value = screenTwo.songTime
+            screenTwo.timeBar.value = round_up(screenTwo.songTime,1)
             Clock.unschedule(screenTwo.timeBar.increment_time)
             screenTwo.playbutton.state = 'normal'
 
@@ -303,8 +513,6 @@ class PlayButton(ToggleButton):
                 loopTime = (float(screenTwo.endTime.text) - float(screenTwo.startTime.text))*(120/float(screenTwo.tempo.text))
                 self.playButtonAction()
                 self.loopEvent = Clock.schedule_interval(self.playButtonAction, loopTime)
-                print('Scheduling loop event: {}'.format(self.loopEvent))
-
 
         elif(self.state == 'normal'):
 
@@ -337,9 +545,9 @@ class PlayButton(ToggleButton):
             App.get_running_app().root.ids.screen_two.endTime.text = str(round_up(screenTwo.songTime,1))
 
         # Checking if cut required. Always stores new MIDI file called 'temp' and is played
-        tabsclass.cutMIDI(screenTwo.midiPath,'MIDI/temp.mid', startTime, endTime, tempo)
-        print('Playing {} at a tempo of {} from {} to {}'.format(screenTwo.midiPath,tempo, startTime, endTime))
-        screenTwo.sound = self.playMusic('MIDI/temp.mid')
+        tabsclass.cutMIDI('MIDI/tempMain.mid','MIDI/tempCut.mid', startTime, endTime, tempo)
+        print('Playing {} at a tempo of {} from {} to {}'.format(screenTwo.fileName,tempo, startTime, round_up(endTime,1)))
+        screenTwo.sound = self.playMusic('MIDI/tempCut.mid')
 
         # Loading current time in watch.
         screenTwo.currentTime = startTime
@@ -409,8 +617,6 @@ class LoopButton(ToggleButton):
         # Incase play has not been pressed
         try:
             loopEvent = App.get_running_app().root.ids.screen_two.playbutton.loopEvent
-
-            print('Unscheduling loop event: {}'.format(loopEvent))
             Clock.unschedule(loopEvent)
         except:
             pass
@@ -419,11 +625,13 @@ class BackButton(Button):
 
     def on_release(self):
 
-        App.get_running_app().root.ids.screen_two.playbutton.stopMusic()
+        SM = App.get_running_app().root.ids.screen_manager
+        if(SM.current == 'screen2'):
+            App.get_running_app().root.ids.screen_two.playbutton.stopMusic()
 
-        App.get_running_app().root.ids.screen_manager.transition = SlideTransition(direction='right')
-        App.get_running_app().root.ids.screen_manager.current = 'screen1'
-        App.get_running_app().root.ids.screen_manager.transition = SlideTransition(direction='left')
+        SM.transition = SlideTransition(direction='right')
+        SM.current = 'screen1'
+        SM.transition = SlideTransition(direction='left')
 
 def round_up(n, decimals=0):
     multiplier = 10 ** decimals

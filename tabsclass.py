@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import math
+import csv
 from midiutil import MIDIFile
 from mido import MidiFile as MIDIread
-
 
 # GLOBAL VARIABLES
 
@@ -52,7 +52,6 @@ fsNoteToValues = {key: value + 24 for (key, value) in fsNoteToValues.items()}
 valueToNotes = {value: key for (key, value) in noteToValues.items()}
 fsValueToNotes = {value: key for (key, value) in fsNoteToValues.items()}
 
-
 # The class Tabs can be intialized by either loading a dataframe in Tabs format
 # or inputting a path and reading an excel
 # ------------------------------------------
@@ -64,8 +63,8 @@ fsValueToNotes = {value: key for (key, value) in fsNoteToValues.items()}
 # - MIDIvalues (List of MIDIvalues)
 # ------------------------------------------
 # Methods:
-# - _loadTabs(path): reads tab from excel sheet. Called by constructor.
-# - _loadMIDI(path, start, end): reads a tab from MIDI format. Called by constructor
+# - loadXSL(path): reads tab from excel sheet. Called by constructor.
+# - loadMIDI(path, start, end): reads a tab from MIDI format. Called by constructor
 # - cutMIDI(input, output, start, end): reads MIDI and cuts the desired section
 # - _storeTabNotes(): returns list of notes in sparse format with list of coordinates
 # - _convertTabToSteps(): computes steps between all the notes in comparison to first note
@@ -73,7 +72,9 @@ fsValueToNotes = {value: key for (key, value) in fsNoteToValues.items()}
 # - _extractMIDIvalues(): Stores the MIDI values for each note. Stores 'S' for slaps.
 # - _bestNoteToStart(cumMissedNotes): Used in applyScaleToTab to identify the note with the least missed notes
 # - _replaceWithClosest(scale,value): Finds the closest note in the scale when a note is missed in applyScaleToTab
-# - applyScaleToTab(scale): Checks if the tabs can be applied to a specific scale based on the steps between notes
+# - applyScaleToTab(scale, replaceClosest=True, replaceActual=False):
+#  Checks if the tabs can be applied to a specific scale based on the steps between notes
+#  replaceClosest uses closes available note in scale, replaceActual disregard notes in scale
 # - mapNewScale(tabScale,newScale): replaces the scale used to compose the tab with the newScale
 # - writeToMIDI(path): Writes the tab as a MIDI file to the entered path
 # - readMIDI(path): Reads MIDI file and outputs all the tracks/notes
@@ -84,28 +85,23 @@ class Tabs():
 
         if (isinstance(path, pd.DataFrame)):
             self.tab = path
-            # In order to calculate song time
-            self.notes, self.notesLoc = self._storeTabNotes()
-            self.songTime = self.notesLoc[-1][0] * 2 + (self.notesLoc[-1][1] + 1) * 0.125
         elif('xlsx' in path):
-
-            self.tab = self._loadTabs(path)
-            # In order to calculate song time
-            self.notes, self.notesLoc = self._storeTabNotes()
-            self.songTime = self.notesLoc[-1][0] * 2 + (self.notesLoc[-1][1] + 1) * 0.125
+            self.loadXSL(path)
         elif('mid' in path):
-            if('startTime' in kwargs and 'endTime' in kwargs):
-                self.tab = self._loadMIDI(path, kwargs['startTime'], kwargs['endTime'])
+            if('startTime' in kwargs and 'endTime' in kwargs): # needed for cutMIDI method
+                self.loadMIDI(path, kwargs['startTime'], kwargs['endTime'])
             else:
-                self.tab = self._loadMIDI(path)
+                self.loadMIDI(path)
+        elif('csv' in path):
+            self.loadCSV(path)
 
-
-        self.notes, self.notesLoc = self._storeTabNotes()
-        self.tabSteps = self._convertTabToSteps()
-        self.MIDIvalues = self._extractMIDIvalues()
+        self._storeTabNotes()
+        self.songTime = self.notesLoc[-1][0] * 2 + (self.notesLoc[-1][1] + 1) * 0.125 + 0.5 # Adding 0.5 for last note duration
+        self._convertTabToSteps()
+        self._extractMIDIvalues()
 
     # Loads the tabs from excel. Fills the Na values of '-' and organizes the dataframe
-    def _loadTabs(self, path):
+    def loadXSL(self, path):
         # Reading tabs from excel sheet and fill NaNs with '-'
         tabs = pd.read_excel(path)
         tabs = tabs.fillna('-')
@@ -121,60 +117,95 @@ class Tabs():
 
         return tabs
 
-    # Methods that read a MIDI file and outputs a tab in dataframe format
-    def _loadMIDI(self, path, startTime=0, endTime=float('inf')):
+    def loadCSV(self, path):
 
-        newTab = pd.read_csv("Tabs/emptyTab.csv")
+        with open(path) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            allNotes = []
+            for row in csv_reader:
+                allNotes += row
+
+            numRows, notesOnLastRow = divmod(len(allNotes), 16)
+
+        # Creating empty dataframe based on number of notes
+        header = 'o,oe,oen,oend,t,te,ten,tend,th,the,then,thend,f,fe,fen,fend'.split(',')
+        csvTabs = pd.DataFrame('-', index=np.arange(numRows + 1*notesOnLastRow), columns=header)
+
+        noteCounter = 0
+        for r in np.arange(numRows + 1):
+            for c in np.arange(16):
+                if(noteCounter >= len(allNotes)):
+                    break
+                if(allNotes[noteCounter] != '-'):
+                    csvTabs.iloc[r][c] = allNotes[noteCounter]
+                noteCounter += 1
+
+        self.tab = csvTabs
+
+        return csvTabs
+
+    # Methods that read a MIDI file and outputs a tab in dataframe format
+    def loadMIDI(self, path, startTime=0, endTime=float('inf')):
+
+        # Reads MIDI file
         mf = self.readMIDI(path, False)
 
         # Initalizing Lists
         midiNotes = []
         midiTimes = []
         midiNoteLocations = []
+        maxTime = 0
 
+        # Looping through MIDI file to store note actions and corresponding times
+        # MIDI messages are in format 'note_on channel=X note=X velocity=X time=1920'
         for i, track in enumerate(mf.tracks):
             cumTime = 0
             for ii, msg in enumerate(track):
                 noteAction = str(msg).split()
                 if (not msg.is_meta):
                     noteStatus = noteAction[0]
-                    if (i == 2):
+                    if (i == 2): #If track 2 then we only have slaps
                         notePitch = 'S'
                     else:
                         notePitch =valueToNotes[int(noteAction[2][5:])]
 
+                    # Storing action time
                     noteActionTime = noteAction[4]
                     cumTime += int(noteActionTime[5:])
-
                     # Time adjuster is used to change the tempo.
-                    # 1920 seems to be equivalent to a second in MIDI time. (e.g. reading 960 in MIDI msg is 0.5 second)
+                    # 1920 seems to be equivalent to 1 second in MIDI time. (e.g. reading 960 in MIDI msg is 0.5 second)
                     timeAdjuster = 1920
                     actualTime = cumTime / timeAdjuster
 
-                    #In case cut is requested
+                    # This is used for cutMIDI method
                     actualTime -= startTime
+                    if(actualTime > maxTime):
+                        maxTime = actualTime
 
                     if (noteStatus == 'note_on'):
                         midiNotes.append(notePitch)
                         midiTimes.append(actualTime)
                         midiNoteLocations.append((math.floor(actualTime / 2), int((actualTime % 2) * 8)))
 
-        self.songTime = actualTime+0.125 # Added 0.125 to count to the end of the note
+
+        # Create empty dataFrame to load notes in. num of rows equals total time divided by 2
+        header = 'o,oe,oen,oend,t,te,ten,tend,th,the,then,thend,f,fe,fen,fend'.split(',')
+        newTab = pd.DataFrame('-', index=np.arange(math.ceil(maxTime/2)), columns=header)
 
         combinedList = list(zip(midiNoteLocations, midiNotes, midiTimes))
         for cord, newNote, noteTime in combinedList:
+            # Used for filtering notes out of requested cut (cutMIDI method)
             if(noteTime >= 0 and noteTime <= endTime-startTime):
-                cell = newTab.iloc[cord[0]][cord[1]].split(',')
+                cell = newTab.iloc[cord[0]][cord[1]].split('&') # to check if cell already has note stored
 
-                numOfNotes = len(cell)
                 if (cell[0] == '-'):
                     newTab.iloc[cord[0]][cord[1]] = newNote
                 else:
-                    newTab.iloc[cord[0]][cord[1]] += ',{}'.format(newNote)
+                    newTab.iloc[cord[0]][cord[1]] += '&{}'.format(newNote)
 
+        self.tab = newTab
 
         return newTab
-
 
     # Method that loops over the tabs and stores the the note and corresponding location in two lists
     # Input:
@@ -195,15 +226,19 @@ class Tabs():
             for c in range(0, numColumns):
                 if (self.tab.iloc[r][c] != '-'):
                     # Check if we have a chord
-                    notes = self.tab.iloc[r][c].split(',')
+                    notes = self.tab.iloc[r][c].split('&')
                     for i, note in enumerate(notes):
                         allNotesInTab.append(note)
                         if (len(notes) > 1):  # To identify whether stored note is a chord
                             cordOfNotesInTab.append((r, c, 'C{}'.format(i)))  # index will show if first note in chord
-                        elif (note == 'S'):
-                            cordOfNotesInTab.append((r, c, 'S'.format(i)))  # index will show if note is slap
+                        # elif (note == 'S'): # MIGHT NOT BE NEEDED (COMMENTED OUT JUNE 18)
+                        #     cordOfNotesInTab.append((r, c, 'S'.format(i)))  # index will show if note is slap
                         else:
                             cordOfNotesInTab.append((r, c, ''))
+
+        self.scale = set(allNotesInTab)
+        self.notes = allNotesInTab
+        self.notesLoc = cordOfNotesInTab
 
         return allNotesInTab, cordOfNotesInTab
 
@@ -227,6 +262,7 @@ class Tabs():
         # Computes the steps of all the notes compared to first note
         tabSteps = np.array(allValuesInTab) - allValuesInTab[0]
 
+        self.tabSteps = tabSteps
         # returns reversed list
         return tabSteps
 
@@ -243,13 +279,14 @@ class Tabs():
             if ('C' in cord[2]):
                 if (int(cord[2][1]) > 0):
                     # If it is not the first note in chord, we apend it to same location
-                    newTabs.iloc[cord[0]][cord[1]] += ',{}'.format(newNote)
+                    newTabs.iloc[cord[0]][cord[1]] += '&{}'.format(newNote)
                 else:
                     # If it is the first note in chord we replace contents
                     newTabs.iloc[cord[0]][cord[1]] = newNote
             else:
                 # Replace contents with new note
                 newTabs.iloc[cord[0]][cord[1]] = newNote
+
 
         return newTabs
 
@@ -263,6 +300,8 @@ class Tabs():
                 MIDIvalues.append("S")
             else:
                 MIDIvalues.append(noteToValues[note])
+
+        self.MIDIvalues = MIDIvalues
 
         return MIDIvalues
 
@@ -295,7 +334,7 @@ class Tabs():
     # Check if the tabs can be applied to a specific scale based on the steps between notes
     # Returns a tab for each note in the scale with that note as the starting note.
     # Also returns the number of notes that could not be applied for each note.
-    def applyScaleToTab(self, scale, replaceClosest=False, replaceActual=False):
+    def applyScaleToTab(self, scale, replaceClosest=True, replaceActual=False):
 
         # In case the input is a Scale object or just a list
         if (type(scale) == Scale):
