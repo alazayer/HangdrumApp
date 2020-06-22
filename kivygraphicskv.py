@@ -1,18 +1,3 @@
-#Widgets
-#Widgets are user interface elements that you add to your program to provide some kind of functionality.
-# They may or may not be visible. Examples would be a file browser, buttons, sliders, lists and so on.
-# Widgets receive MotionEvents.
-# We have to have a root widget
-
-#Layouts
-#You use layouts to arrange widgets.
-# It is of course possible to calculate your widgets’ positions yourself,
-# but often it is more convenient to use one of our ready made layouts.
-# Examples would be Grid Layouts or Box Layouts. You can also nest layouts.
-
-# Input Events (Touches)
-# Up, Down, Move - these affect Widgets
-
 import kivy
 
 # this restrict the kivy version i.e
@@ -119,7 +104,6 @@ class ScreenTwo(Screen):
         # Loading the main scale and check if it is in the expected Scale class format
         # Goes back to main screen if input is in an invalid format
         mainScaleInput = self.readScaleCSV(App.get_running_app().root.ids.screen_one.mainScale.path)
-        #mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
 
         try:
             self.mainScale = tabsclass.Scale(mainScaleInput)
@@ -136,7 +120,6 @@ class ScreenTwo(Screen):
         if(self.secondScaleCheckBox == 'down'):
 
             secondScaleInput = self.readScaleCSV(App.get_running_app().root.ids.screen_one.secondScale.path)
-            #secondScaleInput = App.get_running_app().root.ids.screen_one.secondScale.text.split(',')
             try:
                 self.secondScale = tabsclass.Scale(secondScaleInput)
             except:
@@ -164,15 +147,17 @@ class ScreenTwo(Screen):
         if(not self.formatError):
             # Fixed positions for FloatLayout (NEEDS WORK)
             if(self.reverseScaleCheckBox == 'down'):
-                xpos = [0.45,0.45,0.7,0.2,0.8,0.1,0.7,0.2,0.45]
-                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+                self.posOrd = [0,1,3,2,5,4,7,6,8]
             else:
-                xpos = [0.45,0.45,0.2,0.7,0.1,0.8,0.2,0.7,0.45]
-                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+                self.posOrd = [0,1,2,3,4,5,6,7,8]
+
+            xpos = [0.45, 0.45, 0.2, 0.7, 0.1, 0.8, 0.2, 0.7, 0.45]
+            ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+
             # Creating the notes as button and storing them in dictionary to be referenced later
             self.noteDict = {}
             for i, note in enumerate(self.scaleToDisplay.notes):
-                btn = NoteButton(text=note, pos_hint={'x':xpos[i], 'y':ypos[i]})
+                btn = NoteButton(text= str(i+1)+'\n'+note, halign='center', bold=True, pos_hint={'x':xpos[self.posOrd[i]], 'y':ypos[self.posOrd[i]]})
                 self.noteDict[note] = btn # Creating new dictionary to reference each button
                 self.ids.noteButtons.add_widget(btn)
             # slap is always added separately (Not related to input)
@@ -203,6 +188,14 @@ class ScreenTwo(Screen):
             Melody, Missed, Best = tabsLoaded.applyScaleToTab(self.secondScale, True, False)
             tabsLoaded = tabsclass.Tabs(Melody[Best])
 
+
+        # Comparing notes in tab and scale
+        missingNotes = set(tabsLoaded.MIDIvalues) - set(self.scaleToDisplay.MIDIvalues)
+        missingNotes.discard('S')
+        if(len(missingNotes)>0):
+            print('Cannot play melody on loaded scale...')
+            print('Missing notes are {}'.format(missingNotes))
+            App.get_running_app().root.ids.screen_manager.current = 'screen1'
 
         # Write tempMainMIDI file in case it was converted
         tabsLoaded.writeToMIDI('MIDI/tempMain.mid', float(self.tempo.text), 1)
@@ -253,7 +246,6 @@ class ScreenTwo(Screen):
                 scale = row
 
         return scale
-    # userAccessFolder/Scales/AliScale.csv
 
 class ScreenThree(Screen):
 
@@ -280,7 +272,8 @@ class ScreenThree(Screen):
 
         # Loading the main scale and check if it is in the expected Scale class format
         # Goes back to main screen if input is in an invalid format
-        mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
+        mainScaleInput = self.readScaleCSV(App.get_running_app().root.ids.screen_one.mainScale.path)
+        # mainScaleInput = App.get_running_app().root.ids.screen_one.mainScale.text.split(',')
 
         try:
             self.mainScale = tabsclass.Scale(mainScaleInput)
@@ -290,26 +283,34 @@ class ScreenThree(Screen):
             self.formatError = True
             App.get_running_app().root.ids.screen_manager.current = 'screen1'
 
-
     def _displayNoteButtons(self):
         # Does not display anything in second screen if main scale was not entered correctly
         if (not self.formatError):
             # Fixed positions for FloatLayout (NEEDS WORK)
             if (self.reverseScaleCheckBox == 'down'):
-                xpos = [0.45, 0.45, 0.7, 0.2, 0.8, 0.1, 0.7, 0.2, 0.45]
-                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+                self.posOrd = [0, 1, 3, 2, 5, 4, 7, 6, 8]
             else:
-                xpos = [0.45, 0.45, 0.2, 0.7, 0.1, 0.8, 0.2, 0.7, 0.45]
-                ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+                self.posOrd = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+
+            xpos = [0.45, 0.45, 0.2, 0.7, 0.1, 0.8, 0.2, 0.7, 0.45]
+            ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+
             # Creating the notes as button and storing them in dictionary to be referenced later
             self.noteDict = {}
             for i, note in enumerate(self.scaleToDisplay.notes):
-                btn = NoteButton(text=note, pos_hint={'x': xpos[i], 'y': ypos[i]})
+                btn = NoteButton(text= str(i+1)+'\n'+note, halign='center', bold=True, pos_hint={'x':xpos[self.posOrd[i]], 'y':ypos[self.posOrd[i]]})
                 self.noteDict[note] = btn  # Creating new dictionary to reference each button
                 self.ids.noteButtonsRecord.add_widget(btn)
             self.noteDict['slapRecord'] = self.ids['slapRecord']
+            self.noteDict['blankRecord'] = self.ids['blankRecord']
 
-##### FOR THE FILE CHOOSER POP-OUT ####
+    def readScaleCSV(self, path):
+        with open(path) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            for row in csv_reader:
+                scale = row
+
+        return scale
 
 class BrowseWindow(BoxLayout):
 
@@ -434,8 +435,13 @@ class NoteButton(Button):
         screenThree = App.get_running_app().root.ids.screen_three
 
         if(screenThree.recordbutton.state == 'down'):
-            print('Pressing Note {}'.format(self.text))
-            screenThree.recordbutton.recordedNotes.append(self.text)
+            try: # to remove number associated with note
+                note = self.text.split('\n')[1]
+            except: # in case slap or blank (-) are pressed
+                note = self.text
+
+            print('Pressing Note {}'.format(note))
+            screenThree.recordbutton.recordedNotes.append(note)
             screenThree.tabOutput.text = self.listToString(screenThree.recordbutton.recordedNotes)
 
 
@@ -621,6 +627,49 @@ class LoopButton(ToggleButton):
         except:
             pass
 
+class RotateButton(Button):
+
+    def on_release(self):
+
+        self.rotateHangdrum()
+
+    def updatePositions(self):
+
+        currentPos = App.get_running_app().root.ids.screen_three.posOrd
+
+        newPos = []
+        for pos in currentPos:
+            if(pos==0):
+                newPos.append(0)
+            elif(pos==1 or pos==3 or pos== 5):
+                newPos.append(pos+2)
+            elif(pos==4 or pos==6 or pos==8):
+                newPos.append(pos-2)
+            elif(pos==2):
+                newPos.append(1)
+            elif(pos==7):
+                newPos.append(8)
+
+        App.get_running_app().root.ids.screen_three.posOrd = newPos
+
+        return newPos
+
+    def rotateHangdrum(self):
+
+        newPos = self.updatePositions()
+
+        xpos = [0.45, 0.45, 0.2, 0.7, 0.1, 0.8, 0.2, 0.7, 0.45]
+        ypos = [0.55, 0.25, 0.3, 0.3, 0.55, 0.55, 0.8, 0.8, 0.85]
+
+        noteDict = App.get_running_app().root.ids.screen_three.noteDict
+
+        noteCounter = 0
+        for key, value in noteDict.items():
+            if(noteCounter >= 9):
+                break
+            value.pos_hint = {'x': xpos[newPos[noteCounter]], 'y': ypos[newPos[noteCounter]]}
+            noteCounter += 1
+
 class BackButton(Button):
 
     def on_release(self):
@@ -643,6 +692,7 @@ class MainLayout(StackLayout):
 class graphicsApp(App):
     def build(self):
         return MainLayout()
+
 
 if __name__ == '__main__':
     graphicsApp().run()

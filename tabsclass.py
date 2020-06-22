@@ -45,12 +45,20 @@ fsNoteToValues = {'Db0,C#0': 1, 'Db1,C#1': 13, 'Db2,C#2': 25, 'Db3,C#3': 37, 'Db
                   'Bb0,A#0': 10, 'Bb1,A#1': 22, 'Bb2,A#2': 34, 'Bb3,A#3': 46, 'Bb4,A#4': 58, 'Bb5,A#5': 70,
                   'Bb6,A#6': 82}
 
+flatToSharp = {'Db0':'C#0','Db1':'C#1','Db2':'C#2','Db3':'C#3','Db4':'C#4','Db5':'C#5','Db6':'C#6',
+               'Eb0':'D#0','Eb1':'D#1','Eb2':'D#2','Eb3':'D#3','Eb4':'D#4','Eb5':'D#5','Eb6':'D#6',
+               'Gb0':'F#0','Gb1':'F#1','Gb2':'F#2','Gb3':'F#3','Gb4':'F#4','Gb5':'F#5','Gb6':'F#6',
+               'Ab0':'G#0','Ab1':'G#1','Ab2':'G#2','Ab3':'G#3','Ab4':'G#4','Ab5':'G#5','Ab6':'G#6',
+               'Bb0':'A#0','Bb1':'A#1','Bb2':'A#2','Bb3':'A#3','Bb4':'A#4','Bb5':'A#5','Bb6':'A#6'}
+
+
 # Adding 24 because GarageBand starts from C-2 instead of C0
 fsNoteToValues = {key: value + 24 for (key, value) in fsNoteToValues.items()}
 
 # Opposite of above dictionary
 valueToNotes = {value: key for (key, value) in noteToValues.items()}
 fsValueToNotes = {value: key for (key, value) in fsNoteToValues.items()}
+sharpToFlat = {value: key for (key, value) in flatToSharp.items()}
 
 # The class Tabs can be intialized by either loading a dataframe in Tabs format
 # or inputting a path and reading an excel
@@ -416,7 +424,17 @@ class Tabs():
         newNotes = self.notes.copy()
         for i, note in enumerate(self.notes):
             if (note != 'S'):
-                newNotes[i] = newScaleIndexToNote[tabScaleNoteToIndex[note]]
+                try:
+                    newNotes[i] = newScaleIndexToNote[tabScaleNoteToIndex[note]]
+                except: # Sometimes there is a mixup between flat and sharp notes when loading MIDI. This fixes that.
+                    try:
+                        newNotes[i] = newScaleIndexToNote[tabScaleNoteToIndex[flatToSharp[note]]]
+                    except:
+                        try:
+                            newNotes[i] = newScaleIndexToNote[tabScaleNoteToIndex[sharpToFlat[note]]]
+                        except:
+                            print('Note not in scale!')
+
 
         return Tabs(self._replaceTabWithNewNotes(newNotes))
 
